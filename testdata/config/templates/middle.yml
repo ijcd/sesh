@@ -1,6 +1,0 @@
-extends: base
-hooks:
-  pre: ["middle-pre"]
-tabs:
-  - title: beta
-    cmd: "from-middle"

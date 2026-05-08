@@ -4,7 +4,7 @@ package spec
 // Project is the resolved, merged, expanded form of a project file.
 // Fields use omitempty so unset values round-trip cleanly.
 type Project struct {
-	Name          string            `yaml:"-"`              // = file basename (set by loader)
+	Name          string            `yaml:"-"` // = file basename (set by loader)
 	Extends       string            `yaml:"extends,omitempty"`
 	Cwd           string            `yaml:"cwd,omitempty"`
 	Driver        string            `yaml:"driver,omitempty"`

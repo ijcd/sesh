@@ -1,6 +1,0 @@
-driver: tmux
-hooks:
-  pre: ["base-pre"]
-tabs:
-  - title: alpha
-    cmd: "from-base"
