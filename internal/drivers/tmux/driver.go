@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -22,8 +23,8 @@ type execRunner struct{}
 
 func (execRunner) Run(ctx context.Context, args ...string) error {
 	cmd := exec.CommandContext(ctx, "tmux", args...)
-	cmd.Stdout = nil // discard
-	cmd.Stderr = nil
+	cmd.Stdout = nil // discard; tmux Run commands are silent on success
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
@@ -31,6 +32,7 @@ func (execRunner) RunCapture(ctx context.Context, args ...string) (string, error
 	cmd := exec.CommandContext(ctx, "tmux", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
+	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	return out.String(), err
 }
