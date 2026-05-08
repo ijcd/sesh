@@ -30,3 +30,6 @@ func (e *Engine) driverFor(name string) (drivers.Driver, error) {
 	}
 	return d, nil
 }
+
+// Driver returns the registered driver by name, or nil.
+func (e *Engine) Driver(name string) drivers.Driver { return e.drivers[name] }
