@@ -1,0 +1,6 @@
+extends: middle
+hooks:
+  pre: ["leaf-pre"]
+tabs:
+  - title: gamma
+    cmd: "from-leaf"
