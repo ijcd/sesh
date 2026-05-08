@@ -1,9 +1,13 @@
 package main
 
-import "fmt"
-
-const Version = "0.1.0-dev"
+import (
+	"fmt"
+	"os"
+)
 
 func main() {
-	fmt.Println("sesh", Version)
+	if err := newRootCmd().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "sesh:", err)
+		os.Exit(1)
+	}
 }

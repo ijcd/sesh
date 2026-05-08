@@ -1,0 +1,22 @@
+package main
+
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/ijcd/sesh/internal/engine"
+)
+
+func newUpCmd(*engine.Engine) *cobra.Command    { return &cobra.Command{Use: "up", Hidden: true} }
+func newDownCmd(*engine.Engine) *cobra.Command  { return &cobra.Command{Use: "down", Hidden: true} }
+func newLsCmd() *cobra.Command                  { return &cobra.Command{Use: "ls", Hidden: true} }
+func newEditCmd() *cobra.Command                { return &cobra.Command{Use: "edit", Hidden: true} }
+func newNewCmd() *cobra.Command                 { return &cobra.Command{Use: "new", Hidden: true} }
+func newDeleteCmd() *cobra.Command              { return &cobra.Command{Use: "delete", Hidden: true} }
+func newDebugCmd(*engine.Engine) *cobra.Command { return &cobra.Command{Use: "debug", Hidden: true} }
+func newCaptureCmd(*engine.Engine) *cobra.Command {
+	return &cobra.Command{Use: "capture", Hidden: true}
+}
+func newLocalCmd(*engine.Engine) *cobra.Command { return &cobra.Command{Use: "local", Hidden: true} }
+func newValidateCmd(*engine.Engine) *cobra.Command {
+	return &cobra.Command{Use: "validate", Hidden: true}
+}
