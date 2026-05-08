@@ -1,0 +1,159 @@
+package config
+
+import "github.com/ijcd/sesh/internal/spec"
+
+// Merge applies the unified merge rules: scalars child-wins, hashes deep-merge,
+// titled lists merge by title (drop:true removes), string lists append.
+// Returns a fresh *spec.Project; inputs are not mutated.
+func Merge(parent, child *spec.Project) *spec.Project {
+	out := &spec.Project{
+		Name:          coalesce(child.Name, parent.Name),
+		Extends:       "", // cleared after merge — chain already resolved upstream
+		Cwd:           coalesce(child.Cwd, parent.Cwd),
+		Driver:        coalesce(child.Driver, parent.Driver),
+		Session:       coalesce(child.Session, parent.Session),
+		StartupWindow: coalesce(child.StartupWindow, parent.StartupWindow),
+		StartupPane:   coalesce(child.StartupPane, parent.StartupPane),
+		Attach:        coalesceBool(child.Attach, parent.Attach),
+		Vars:          mergeMap(parent.Vars, child.Vars),
+		Hooks:         mergeHooks(parent.Hooks, child.Hooks),
+		PreWindow:     appendStrings(parent.PreWindow, child.PreWindow),
+		Tabs:          mergeTabs(parent.Tabs, child.Tabs),
+	}
+	return out
+}
+
+func coalesce(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func coalesceBool(a, b *bool) *bool {
+	if a != nil {
+		return a
+	}
+	return b
+}
+
+func mergeMap(p, c map[string]string) map[string]string {
+	if p == nil && c == nil {
+		return nil
+	}
+	out := make(map[string]string, len(p)+len(c))
+	for k, v := range p {
+		out[k] = v
+	}
+	for k, v := range c {
+		out[k] = v
+	}
+	return out
+}
+
+func mergeHooks(p, c spec.Hooks) spec.Hooks {
+	return spec.Hooks{
+		Pre:     appendStrings(p.Pre, c.Pre),
+		Post:    appendStrings(p.Post, c.Post),
+		OnStart: appendStrings(p.OnStart, c.OnStart),
+		OnStop:  appendStrings(p.OnStop, c.OnStop),
+	}
+}
+
+func appendStrings(p, c []string) []string {
+	if len(p) == 0 && len(c) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(p)+len(c))
+	out = append(out, p...)
+	out = append(out, c...)
+	return out
+}
+
+func mergeTabs(parent, child []spec.Tab) []spec.Tab {
+	childByTitle := map[string]*spec.Tab{}
+	for i := range child {
+		childByTitle[child[i].Title] = &child[i]
+	}
+	seen := map[string]bool{}
+	out := make([]spec.Tab, 0, len(parent)+len(child))
+
+	for i := range parent {
+		p := parent[i]
+		seen[p.Title] = true
+		if c, ok := childByTitle[p.Title]; ok {
+			if c.Drop {
+				continue
+			}
+			out = append(out, mergeTab(p, *c))
+		} else {
+			out = append(out, p)
+		}
+	}
+	for i := range child {
+		c := child[i]
+		if seen[c.Title] {
+			continue
+		}
+		if c.Drop {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+func mergeTab(p, c spec.Tab) spec.Tab {
+	return spec.Tab{
+		Title:     p.Title,
+		Cwd:       coalesce(c.Cwd, p.Cwd),
+		Cmd:       coalesce(c.Cmd, p.Cmd),
+		Driver:    coalesce(c.Driver, p.Driver),
+		Layout:    coalesce(c.Layout, p.Layout),
+		PreWindow: appendStrings(p.PreWindow, c.PreWindow),
+		Panes:     mergePanes(p.Panes, c.Panes),
+		Drop:      false,
+	}
+}
+
+func mergePanes(parent, child []spec.Pane) []spec.Pane {
+	childByTitle := map[string]*spec.Pane{}
+	for i := range child {
+		childByTitle[child[i].Title] = &child[i]
+	}
+	seen := map[string]bool{}
+	out := make([]spec.Pane, 0, len(parent)+len(child))
+
+	for i := range parent {
+		p := parent[i]
+		seen[p.Title] = true
+		if c, ok := childByTitle[p.Title]; ok {
+			if c.Drop {
+				continue
+			}
+			out = append(out, mergePane(p, *c))
+		} else {
+			out = append(out, p)
+		}
+	}
+	for i := range child {
+		c := child[i]
+		if seen[c.Title] {
+			continue
+		}
+		if c.Drop {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+func mergePane(p, c spec.Pane) spec.Pane {
+	return spec.Pane{
+		Title: p.Title,
+		Cwd:   coalesce(c.Cwd, p.Cwd),
+		Cmd:   coalesce(c.Cmd, p.Cmd),
+		Drop:  false,
+	}
+}
