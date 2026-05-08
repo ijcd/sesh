@@ -6,7 +6,6 @@ import (
 	"github.com/ijcd/sesh/internal/engine"
 )
 
-func newEditCmd() *cobra.Command                { return &cobra.Command{Use: "edit", Hidden: true} }
 func newNewCmd() *cobra.Command                 { return &cobra.Command{Use: "new", Hidden: true} }
 func newDeleteCmd() *cobra.Command              { return &cobra.Command{Use: "delete", Hidden: true} }
 func newDebugCmd(*engine.Engine) *cobra.Command { return &cobra.Command{Use: "debug", Hidden: true} }
