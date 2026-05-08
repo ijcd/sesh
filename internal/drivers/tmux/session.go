@@ -52,7 +52,7 @@ func buildTab(sess string, tab spec.Tab, defaultCwd string, isFirst bool) []stri
 		// First pane is the window's existing pane; populate by send-keys.
 		first := tab.Panes[0]
 		if first.Cmd != "" {
-			cmds = append(cmds, fmt.Sprintf("tmux send-keys -t %s.0 %s Enter",
+			cmds = append(cmds, fmt.Sprintf("tmux send-keys -t %s %s Enter",
 				shellQuote(target), shellQuote(first.Cmd)))
 		}
 		if first.Title != "" {
@@ -81,7 +81,7 @@ func buildTab(sess string, tab spec.Tab, defaultCwd string, isFirst bool) []stri
 				shellQuote(target), shellQuote(tab.Layout)))
 		}
 	case tab.Cmd != "":
-		cmds = append(cmds, fmt.Sprintf("tmux send-keys -t %s.0 %s Enter",
+		cmds = append(cmds, fmt.Sprintf("tmux send-keys -t %s %s Enter",
 			shellQuote(target), shellQuote(tab.Cmd)))
 	}
 	return cmds
