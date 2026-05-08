@@ -30,7 +30,13 @@ func newLocalCmd(e *engine.Engine) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return e.Up(context.Background(), p, force)
+			if err := e.Up(context.Background(), p, force); err != nil {
+				return err
+			}
+			if p.Attach == nil || *p.Attach {
+				return attachToTmux(p)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Down + Up if a session already exists")

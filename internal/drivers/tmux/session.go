@@ -91,10 +91,12 @@ func sessionName(p *spec.Project) string {
 	if p.Session != "" {
 		return p.Session
 	}
-	return slug(p.Name)
+	return Slug(p.Name)
 }
 
-func slug(s string) string {
+// Slug converts a project name to a tmux-safe session name:
+// lowercase, non-alphanumeric chars replaced with '-', trimmed of leading/trailing dashes.
+func Slug(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(s) {
 		switch {

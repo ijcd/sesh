@@ -67,11 +67,11 @@ func (d *Driver) Up(ctx context.Context, p *spec.Project) error {
 }
 
 func (d *Driver) Down(ctx context.Context, name string) error {
-	return d.r.Run(ctx, "kill-session", "-t", slug(name))
+	return d.r.Run(ctx, "kill-session", "-t", Slug(name))
 }
 
 func (d *Driver) Status(ctx context.Context, name string) (drivers.Status, error) {
-	_, err := d.r.RunCapture(ctx, "has-session", "-t", slug(name))
+	_, err := d.r.RunCapture(ctx, "has-session", "-t", Slug(name))
 	if err == nil {
 		return drivers.StatusExists, nil
 	}
