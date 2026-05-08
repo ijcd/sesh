@@ -1,0 +1,6 @@
+driver: tmux
+cwd: /tmp/example
+tabs:
+  - title: shell
+  - title: dev
+    cmd: echo hi
