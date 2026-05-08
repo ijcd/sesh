@@ -82,11 +82,6 @@ func (d *Driver) DryRun(p *spec.Project) ([]string, error) {
 	return BuildCommands(p)
 }
 
-// Capture is implemented in Task 16; stub satisfies drivers.Driver interface.
-func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
-	return nil, nil
-}
-
 // splitTmuxCommand parses a `tmux ...` line back into argv. We use single-quoted
 // values throughout BuildCommands, so a simple state-machine works.
 func splitTmuxCommand(line string) ([]string, error) {
