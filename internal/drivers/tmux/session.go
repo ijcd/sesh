@@ -2,16 +2,50 @@
 package tmux
 
 import (
+	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/ijcd/sesh/internal/spec"
 )
 
+// BuildOpts controls index-related build behavior.
+type BuildOpts struct {
+	// PaneBaseIndex mirrors tmux's pane-base-index option (default 0).
+	PaneBaseIndex int
+	// BaseIndex mirrors tmux's base-index option (default 0). Plumbed for
+	// future use; window addressing currently uses names, not indices.
+	BaseIndex int
+}
+
+// queryIntOption runs `tmux show-options -gv <name>` via r, parses the
+// result as int, and returns def on any error or empty output.
+func queryIntOption(ctx context.Context, r Runner, name string, def int) int {
+	out, err := r.RunCapture(ctx, "show-options", "-gv", name)
+	if err != nil {
+		return def
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return def
+	}
+	n, err := strconv.Atoi(out)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
 // BuildCommands returns the exact tmux invocations the driver would run for p.
 // Each element is a complete command including the leading "tmux ".
 // Used by both DryRun (`sesh debug`) and Up (which executes them).
 func BuildCommands(p *spec.Project) ([]string, error) {
+	return BuildCommandsWithOpts(p, BuildOpts{})
+}
+
+// BuildCommandsWithOpts is like BuildCommands but respects index options.
+func BuildCommandsWithOpts(p *spec.Project, opts BuildOpts) ([]string, error) {
 	sess := sessionName(p)
 	cwd := shellQuote(p.Cwd)
 
@@ -24,7 +58,7 @@ func BuildCommands(p *spec.Project) ([]string, error) {
 	first := p.Tabs[0]
 	cmds = append(cmds, fmt.Sprintf("tmux new-session -d -s %s -n %s -c %s",
 		shellQuote(sess), shellQuote(first.Title), cwd))
-	cmds = append(cmds, buildTab(sess, first, p.Cwd, true)...)
+	cmds = append(cmds, buildTabWithOpts(sess, first, p.Cwd, true, opts)...)
 
 	for _, tab := range p.Tabs[1:] {
 		tcwd := tab.Cwd
@@ -33,13 +67,17 @@ func BuildCommands(p *spec.Project) ([]string, error) {
 		}
 		cmds = append(cmds, fmt.Sprintf("tmux new-window -t %s -n %s -c %s",
 			shellQuote(sess), shellQuote(tab.Title), shellQuote(tcwd)))
-		cmds = append(cmds, buildTab(sess, tab, tcwd, false)...)
+		cmds = append(cmds, buildTabWithOpts(sess, tab, tcwd, false, opts)...)
 	}
 
 	return cmds, nil
 }
 
 func buildTab(sess string, tab spec.Tab, defaultCwd string, isFirst bool) []string {
+	return buildTabWithOpts(sess, tab, defaultCwd, isFirst, BuildOpts{})
+}
+
+func buildTabWithOpts(sess string, tab spec.Tab, defaultCwd string, isFirst bool, opts BuildOpts) []string {
 	var cmds []string
 	target := fmt.Sprintf("%s:%s", sess, tab.Title)
 	tcwd := tab.Cwd
@@ -56,8 +94,8 @@ func buildTab(sess string, tab spec.Tab, defaultCwd string, isFirst bool) []stri
 				shellQuote(target), shellQuote(first.Cmd)))
 		}
 		if first.Title != "" {
-			cmds = append(cmds, fmt.Sprintf("tmux select-pane -t %s.0 -T %s",
-				shellQuote(target), shellQuote(first.Title)))
+			cmds = append(cmds, fmt.Sprintf("tmux select-pane -t %s.%d -T %s",
+				shellQuote(target), opts.PaneBaseIndex, shellQuote(first.Title)))
 		}
 		for i, pane := range tab.Panes[1:] {
 			pcwd := pane.Cwd
@@ -66,7 +104,7 @@ func buildTab(sess string, tab spec.Tab, defaultCwd string, isFirst bool) []stri
 			}
 			cmds = append(cmds, fmt.Sprintf("tmux split-window -t %s -c %s",
 				shellQuote(target), shellQuote(pcwd)))
-			paneTarget := fmt.Sprintf("%s.%d", target, i+1)
+			paneTarget := fmt.Sprintf("%s.%d", target, opts.PaneBaseIndex+i+1)
 			if pane.Cmd != "" {
 				cmds = append(cmds, fmt.Sprintf("tmux send-keys -t %s %s Enter",
 					shellQuote(paneTarget), shellQuote(pane.Cmd)))

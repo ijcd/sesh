@@ -51,7 +51,9 @@ func newWith(r Runner) *Driver { return &Driver{r: r} }
 func (d *Driver) Name() string { return "tmux" }
 
 func (d *Driver) Up(ctx context.Context, p *spec.Project) error {
-	cmds, err := BuildCommands(p)
+	pbi := queryIntOption(ctx, d.r, "pane-base-index", 0)
+	bi := queryIntOption(ctx, d.r, "base-index", 0)
+	cmds, err := BuildCommandsWithOpts(p, BuildOpts{PaneBaseIndex: pbi, BaseIndex: bi})
 	if err != nil {
 		return err
 	}

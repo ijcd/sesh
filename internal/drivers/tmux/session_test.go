@@ -1,11 +1,22 @@
 package tmux
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/ijcd/sesh/internal/spec"
 )
+
+// captureRunner returns a fixed string for RunCapture calls keyed by joined args.
+type captureRunner struct {
+	outputs map[string]string
+}
+
+func (r *captureRunner) Run(_ context.Context, _ ...string) error { return nil }
+func (r *captureRunner) RunCapture(_ context.Context, args ...string) (string, error) {
+	return r.outputs[strings.Join(args, " ")], nil
+}
 
 func TestBuildCommands_SingleLeafTab(t *testing.T) {
 	p := &spec.Project{
@@ -143,5 +154,54 @@ func TestBuildCommands_LayoutApplied(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected select-layout command, got:\n%s", strings.Join(cmds, "\n"))
+	}
+}
+
+func TestBuildCommands_RespectsPaneBaseIndex(t *testing.T) {
+	p := &spec.Project{
+		Name: "demo", Driver: "tmux", Cwd: "/tmp",
+		Tabs: []spec.Tab{{Title: "dev", Driver: "tmux",
+			Panes: []spec.Pane{
+				{Title: "p1", Cmd: "a"},
+				{Title: "p2", Cmd: "b"},
+				{Title: "p3", Cmd: "c"},
+			}}},
+	}
+	cmds, err := BuildCommandsWithOpts(p, BuildOpts{PaneBaseIndex: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmds, "\n")
+
+	// With pane-base-index=1: second pane is .2, third pane is .3
+	if !strings.Contains(joined, "'demo:dev.2'") {
+		t.Errorf("expected send-keys to 'demo:dev.2' with paneBaseIndex=1\n%s", joined)
+	}
+	if !strings.Contains(joined, "'demo:dev.3'") {
+		t.Errorf("expected send-keys to 'demo:dev.3' with paneBaseIndex=1\n%s", joined)
+	}
+	// .1 should NOT appear (that would be the default base-0 indexing)
+	if strings.Contains(joined, "'demo:dev.1'") {
+		t.Errorf("unexpected 'demo:dev.1' with paneBaseIndex=1\n%s", joined)
+	}
+}
+
+func TestQueryIntOption(t *testing.T) {
+	tests := []struct {
+		output string
+		want   int
+	}{
+		{"1\n", 1},
+		{"0\n", 0},
+		{"", 42},          // empty → default
+		{"garbage\n", 42}, // parse error → default
+	}
+	ctx := context.Background()
+	for _, tc := range tests {
+		r := &captureRunner{outputs: map[string]string{"show-options -gv pane-base-index": tc.output}}
+		got := queryIntOption(ctx, r, "pane-base-index", 42)
+		if got != tc.want {
+			t.Errorf("output=%q: got %d, want %d", tc.output, got, tc.want)
+		}
 	}
 }
