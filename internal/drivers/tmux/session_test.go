@@ -84,6 +84,47 @@ func TestBuildCommands_PanesSplitAfterFirst(t *testing.T) {
 	}
 }
 
+func TestBuildCommands_PaneTargetFormat(t *testing.T) {
+	p := &spec.Project{
+		Name: "demo", Driver: "tmux", Cwd: "/tmp",
+		Tabs: []spec.Tab{{Title: "dev", Driver: "tmux",
+			Panes: []spec.Pane{
+				{Title: "p1", Cmd: "a"},
+				{Title: "p2", Cmd: "b"},
+				{Title: "p3", Cmd: "c"},
+			}}},
+	}
+	cmds, err := BuildCommands(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmds, "\n")
+
+	// split-window for panes 2 and 3 both target the window (not a pane index)
+	splitCount := 0
+	for _, c := range cmds {
+		if strings.Contains(c, "split-window") && strings.Contains(c, "'demo:dev'") {
+			splitCount++
+		}
+	}
+	if splitCount != 2 {
+		t.Errorf("expected 2 split-window targeting 'demo:dev', got %d\n%s", splitCount, joined)
+	}
+
+	// send-keys to second pane uses 'demo:dev.1'
+	if !strings.Contains(joined, "'demo:dev.1'") {
+		t.Errorf("expected send-keys to 'demo:dev.1'\n%s", joined)
+	}
+	// send-keys to third pane uses 'demo:dev.2'
+	if !strings.Contains(joined, "'demo:dev.2'") {
+		t.Errorf("expected send-keys to 'demo:dev.2'\n%s", joined)
+	}
+	// first pane: send-keys targets the window itself, no .N suffix
+	if !strings.Contains(joined, "-t 'demo:dev' 'a' Enter") {
+		t.Errorf("expected first pane send-keys to 'demo:dev' with no .N\n%s", joined)
+	}
+}
+
 func TestBuildCommands_LayoutApplied(t *testing.T) {
 	p := &spec.Project{
 		Name: "demo", Driver: "tmux", Cwd: "/tmp",
