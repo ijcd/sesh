@@ -84,3 +84,17 @@ func TestValidate_DefaultsDriverWhenEmpty(t *testing.T) {
 		t.Errorf("driver not defaulted, got %q", p.Driver)
 	}
 }
+
+func TestValidate_RequiresAtLeastOneTab(t *testing.T) {
+	p := &spec.Project{Driver: "tmux", Tabs: nil}
+	errs := Validate(p, []string{"tmux"})
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "tabs") && strings.Contains(e.Error(), "at least one") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected 'tabs: at least one' error, got %v", errs)
+	}
+}

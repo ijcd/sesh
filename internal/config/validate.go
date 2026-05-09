@@ -33,6 +33,10 @@ func Validate(p *spec.Project, registeredDrivers []string) []error {
 			Reason: fmt.Sprintf("driver %q not registered (v0.1: %v)", p.Driver, registeredDrivers)})
 	}
 
+	if len(p.Tabs) == 0 {
+		errs = append(errs, ValidationError{Path: "tabs", Reason: "at least one tab is required"})
+	}
+
 	seenTab := map[string]bool{}
 	for ti, t := range p.Tabs {
 		prefix := fmt.Sprintf("tabs[%d]", ti)
