@@ -4,11 +4,24 @@ package tmux
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/ijcd/sesh/internal/spec"
 )
+
+// resolveCwd joins child with parent: absolute child is returned as-is,
+// relative child is joined onto parent, empty child inherits parent.
+func resolveCwd(child, parent string) string {
+	if child == "" {
+		return parent
+	}
+	if filepath.IsAbs(child) {
+		return child
+	}
+	return filepath.Join(parent, child)
+}
 
 // BuildOpts controls index-related build behavior.
 type BuildOpts struct {
@@ -47,7 +60,6 @@ func BuildCommands(p *spec.Project) ([]string, error) {
 // BuildCommandsWithOpts is like BuildCommands but respects index options.
 func BuildCommandsWithOpts(p *spec.Project, opts BuildOpts) ([]string, error) {
 	sess := sessionName(p)
-	cwd := shellQuote(p.Cwd)
 
 	var cmds []string
 
@@ -56,15 +68,13 @@ func BuildCommandsWithOpts(p *spec.Project, opts BuildOpts) ([]string, error) {
 	}
 
 	first := p.Tabs[0]
+	firstCwd := resolveCwd(first.Cwd, p.Cwd)
 	cmds = append(cmds, fmt.Sprintf("tmux new-session -d -s %s -n %s -c %s",
-		shellQuote(sess), shellQuote(first.Title), cwd))
-	cmds = append(cmds, buildTabWithOpts(sess, first, p.Cwd, true, opts)...)
+		shellQuote(sess), shellQuote(first.Title), shellQuote(firstCwd)))
+	cmds = append(cmds, buildTabWithOpts(sess, first, firstCwd, true, opts)...)
 
 	for _, tab := range p.Tabs[1:] {
-		tcwd := tab.Cwd
-		if tcwd == "" {
-			tcwd = p.Cwd
-		}
+		tcwd := resolveCwd(tab.Cwd, p.Cwd)
 		cmds = append(cmds, fmt.Sprintf("tmux new-window -t %s -n %s -c %s",
 			shellQuote(sess), shellQuote(tab.Title), shellQuote(tcwd)))
 		cmds = append(cmds, buildTabWithOpts(sess, tab, tcwd, false, opts)...)
@@ -77,13 +87,9 @@ func buildTab(sess string, tab spec.Tab, defaultCwd string, isFirst bool) []stri
 	return buildTabWithOpts(sess, tab, defaultCwd, isFirst, BuildOpts{})
 }
 
-func buildTabWithOpts(sess string, tab spec.Tab, defaultCwd string, isFirst bool, opts BuildOpts) []string {
+func buildTabWithOpts(sess string, tab spec.Tab, tabCwd string, isFirst bool, opts BuildOpts) []string {
 	var cmds []string
 	target := fmt.Sprintf("%s:%s", sess, tab.Title)
-	tcwd := tab.Cwd
-	if tcwd == "" {
-		tcwd = defaultCwd
-	}
 
 	switch {
 	case len(tab.Panes) > 0:
@@ -98,10 +104,7 @@ func buildTabWithOpts(sess string, tab spec.Tab, defaultCwd string, isFirst bool
 				shellQuote(target), opts.PaneBaseIndex, shellQuote(first.Title)))
 		}
 		for i, pane := range tab.Panes[1:] {
-			pcwd := pane.Cwd
-			if pcwd == "" {
-				pcwd = tcwd
-			}
+			pcwd := resolveCwd(pane.Cwd, tabCwd)
 			cmds = append(cmds, fmt.Sprintf("tmux split-window -t %s -c %s",
 				shellQuote(target), shellQuote(pcwd)))
 			paneTarget := fmt.Sprintf("%s.%d", target, opts.PaneBaseIndex+i+1)

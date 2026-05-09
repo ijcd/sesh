@@ -186,6 +186,74 @@ func TestBuildCommands_RespectsPaneBaseIndex(t *testing.T) {
 	}
 }
 
+func TestBuildCommands_TabCwdAbsolute(t *testing.T) {
+	p := &spec.Project{
+		Name: "demo", Driver: "tmux", Cwd: "/home/me",
+		Tabs: []spec.Tab{{Title: "t", Cwd: "/etc"}},
+	}
+	cmds, err := BuildCommands(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmds, "\n")
+	if !strings.Contains(joined, "'/etc'") {
+		t.Errorf("expected tab cwd /etc in cmds:\n%s", joined)
+	}
+	if strings.Contains(joined, "'/home/me'") {
+		t.Errorf("should not contain project cwd /home/me when tab cwd is absolute:\n%s", joined)
+	}
+}
+
+func TestBuildCommands_TabCwdRelative(t *testing.T) {
+	p := &spec.Project{
+		Name: "demo", Driver: "tmux", Cwd: "/home/me",
+		Tabs: []spec.Tab{{Title: "t", Cwd: "src"}},
+	}
+	cmds, err := BuildCommands(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmds, "\n")
+	if !strings.Contains(joined, "'/home/me/src'") {
+		t.Errorf("expected joined cwd /home/me/src in cmds:\n%s", joined)
+	}
+}
+
+func TestBuildCommands_TabCwdInherits(t *testing.T) {
+	p := &spec.Project{
+		Name: "demo", Driver: "tmux", Cwd: "/home/me",
+		Tabs: []spec.Tab{{Title: "t"}},
+	}
+	cmds, err := BuildCommands(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmds, "\n")
+	if !strings.Contains(joined, "'/home/me'") {
+		t.Errorf("expected project cwd /home/me inherited:\n%s", joined)
+	}
+}
+
+func TestBuildCommands_PaneCwdRelativeToTabCwd(t *testing.T) {
+	p := &spec.Project{
+		Name: "demo", Driver: "tmux", Cwd: "/home/me",
+		Tabs: []spec.Tab{{Title: "t", Cwd: "src",
+			Panes: []spec.Pane{
+				{Title: "p1", Cmd: "a"},
+				{Title: "p2", Cmd: "b", Cwd: "lib"},
+			}}},
+	}
+	cmds, err := BuildCommands(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmds, "\n")
+	// pane cwd "lib" should be joined to tab cwd "/home/me/src" → "/home/me/src/lib"
+	if !strings.Contains(joined, "'/home/me/src/lib'") {
+		t.Errorf("expected pane cwd /home/me/src/lib in cmds:\n%s", joined)
+	}
+}
+
 func TestQueryIntOption(t *testing.T) {
 	tests := []struct {
 		output string
