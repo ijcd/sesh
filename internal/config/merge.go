@@ -60,11 +60,11 @@ func mergeHooks(p, c spec.Hooks) spec.Hooks {
 	}
 }
 
-func appendStrings(p, c []string) []string {
+func appendStrings(p, c spec.StringList) spec.StringList {
 	if len(p) == 0 && len(c) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(p)+len(c))
+	out := make(spec.StringList, 0, len(p)+len(c))
 	out = append(out, p...)
 	out = append(out, c...)
 	return out

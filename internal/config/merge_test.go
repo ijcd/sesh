@@ -38,25 +38,25 @@ func TestMerge_VarsDeepMerge(t *testing.T) {
 }
 
 func TestMerge_HookListsAppend(t *testing.T) {
-	parent := &spec.Project{Hooks: spec.Hooks{Pre: []string{"a"}, Post: []string{"x"}}}
-	child := &spec.Project{Hooks: spec.Hooks{Pre: []string{"b"}, OnStart: []string{"y"}}}
+	parent := &spec.Project{Hooks: spec.Hooks{Pre: spec.StringList{"a"}, Post: spec.StringList{"x"}}}
+	child := &spec.Project{Hooks: spec.Hooks{Pre: spec.StringList{"b"}, OnStart: spec.StringList{"y"}}}
 	out := Merge(parent, child)
-	if !reflect.DeepEqual(out.Hooks.Pre, []string{"a", "b"}) {
+	if !reflect.DeepEqual(out.Hooks.Pre, spec.StringList{"a", "b"}) {
 		t.Errorf("Pre = %v", out.Hooks.Pre)
 	}
-	if !reflect.DeepEqual(out.Hooks.Post, []string{"x"}) {
+	if !reflect.DeepEqual(out.Hooks.Post, spec.StringList{"x"}) {
 		t.Errorf("Post = %v", out.Hooks.Post)
 	}
-	if !reflect.DeepEqual(out.Hooks.OnStart, []string{"y"}) {
+	if !reflect.DeepEqual(out.Hooks.OnStart, spec.StringList{"y"}) {
 		t.Errorf("OnStart = %v", out.Hooks.OnStart)
 	}
 }
 
 func TestMerge_PreWindowAppends(t *testing.T) {
-	parent := &spec.Project{PreWindow: []string{"a"}}
-	child := &spec.Project{PreWindow: []string{"b", "c"}}
+	parent := &spec.Project{PreWindow: spec.StringList{"a"}}
+	child := &spec.Project{PreWindow: spec.StringList{"b", "c"}}
 	out := Merge(parent, child)
-	if !reflect.DeepEqual(out.PreWindow, []string{"a", "b", "c"}) {
+	if !reflect.DeepEqual(out.PreWindow, spec.StringList{"a", "b", "c"}) {
 		t.Errorf("PreWindow = %v", out.PreWindow)
 	}
 }

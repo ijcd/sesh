@@ -33,6 +33,51 @@ tabs:
 	}
 }
 
+func TestProject_UnmarshalYAML_HookScalar(t *testing.T) {
+	in := []byte(`
+hooks:
+  pre: 'direnv allow'
+`)
+	var p Project
+	if err := yaml.Unmarshal(in, &p); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(p.Hooks.Pre) != 1 || p.Hooks.Pre[0] != "direnv allow" {
+		t.Errorf("Hooks.Pre = %v, want [direnv allow]", p.Hooks.Pre)
+	}
+}
+
+func TestProject_UnmarshalYAML_HookArray(t *testing.T) {
+	in := []byte(`
+hooks:
+  pre:
+    - 'a'
+    - 'b'
+`)
+	var p Project
+	if err := yaml.Unmarshal(in, &p); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(p.Hooks.Pre) != 2 || p.Hooks.Pre[0] != "a" || p.Hooks.Pre[1] != "b" {
+		t.Errorf("Hooks.Pre = %v, want [a b]", p.Hooks.Pre)
+	}
+}
+
+func TestProject_UnmarshalYAML_PreWindowScalar(t *testing.T) {
+	in := []byte(`
+pre_window: 'source .envrc'
+tabs:
+  - title: shell
+`)
+	var p Project
+	if err := yaml.Unmarshal(in, &p); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(p.PreWindow) != 1 || p.PreWindow[0] != "source .envrc" {
+		t.Errorf("PreWindow = %v, want [source .envrc]", p.PreWindow)
+	}
+}
+
 func TestProject_UnmarshalYAML_FullShape(t *testing.T) {
 	in := []byte(`
 extends: phoenix

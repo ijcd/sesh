@@ -1,6 +1,25 @@
 // Package spec contains the typed shape of a sesh project YAML file.
 package spec
 
+import "github.com/goccy/go-yaml"
+
+// StringList accepts either a YAML scalar or a YAML sequence and stores both as []string.
+type StringList []string
+
+func (s *StringList) UnmarshalYAML(b []byte) error {
+	var single string
+	if err := yaml.Unmarshal(b, &single); err == nil {
+		*s = StringList{single}
+		return nil
+	}
+	var multi []string
+	if err := yaml.Unmarshal(b, &multi); err != nil {
+		return err
+	}
+	*s = StringList(multi)
+	return nil
+}
+
 // Project is the resolved, merged, expanded form of a project file.
 // Fields use omitempty so unset values round-trip cleanly.
 type Project struct {
@@ -14,19 +33,19 @@ type Project struct {
 	StartupPane   string            `yaml:"startup_pane,omitempty"`
 	Vars          map[string]string `yaml:"vars,omitempty"`
 	Hooks         Hooks             `yaml:"hooks,omitempty"`
-	PreWindow     []string          `yaml:"pre_window,omitempty"`
+	PreWindow     StringList        `yaml:"pre_window,omitempty"`
 	Tabs          []Tab             `yaml:"tabs,omitempty"`
 }
 
 type Tab struct {
-	Title     string   `yaml:"title"`
-	Cwd       string   `yaml:"cwd,omitempty"`
-	Cmd       string   `yaml:"cmd,omitempty"`
-	Driver    string   `yaml:"driver,omitempty"`
-	Layout    string   `yaml:"layout,omitempty"`
-	PreWindow []string `yaml:"pre_window,omitempty"`
-	Panes     []Pane   `yaml:"panes,omitempty"`
-	Drop      bool     `yaml:"drop,omitempty"` // sentinel for merge: remove inherited tab
+	Title     string     `yaml:"title"`
+	Cwd       string     `yaml:"cwd,omitempty"`
+	Cmd       string     `yaml:"cmd,omitempty"`
+	Driver    string     `yaml:"driver,omitempty"`
+	Layout    string     `yaml:"layout,omitempty"`
+	PreWindow StringList `yaml:"pre_window,omitempty"`
+	Panes     []Pane     `yaml:"panes,omitempty"`
+	Drop      bool       `yaml:"drop,omitempty"` // sentinel for merge: remove inherited tab
 }
 
 type Pane struct {
@@ -37,8 +56,8 @@ type Pane struct {
 }
 
 type Hooks struct {
-	Pre     []string `yaml:"pre,omitempty"`
-	Post    []string `yaml:"post,omitempty"`
-	OnStart []string `yaml:"on_project_start,omitempty"`
-	OnStop  []string `yaml:"on_project_stop,omitempty"`
+	Pre     StringList `yaml:"pre,omitempty"`
+	Post    StringList `yaml:"post,omitempty"`
+	OnStart StringList `yaml:"on_project_start,omitempty"`
+	OnStop  StringList `yaml:"on_project_stop,omitempty"`
 }
