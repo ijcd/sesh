@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-v0.2 in Go (`cmd/sesh`) — tmux + kitty drivers; `bin/sesh` is the retired Python prototype kept for reference.
+v0.3 in Go (`cmd/sesh`) — tmux + kitty drivers, global config, include:, discovery hook; `bin/sesh` is the retired Python prototype kept for reference.
 
 ## What this is
 
@@ -58,6 +58,16 @@ When extending driver support, **update `VALID_PAIRS` and the `validate()` funct
 - Layout vocab is per-driver verbatim: kitty layouts (`splits`, `tall`, `fat`, `grid`, `horizontal`, `vertical`, `stack`).
 - Cross-driver dispatch for kitty/tmux happens in `engine.Up` via `transformCrossDriverTabs` — the inner tmux session is created first, then the outer kitty tab launches with `cmd: tmux attach -t <inner-name>`.
 - State for `--launch`'d kitty instances lives in `~/.local/state/sesh/state.json` (atomic write under flock).
+
+## Non-obvious gotchas
+
+### v0.3 ergonomics layer
+
+- Global `~/.config/sesh/config.yml` provides scalar/map defaults; lists belong in templates.
+- `include:` replaces `extends:` and accepts a list (`include: [phoenix, hooks/direnv]`); `extends:` errors at validate.
+- Pipeline order in `config.LoadFromPath`: file → ResolveInclude → applyGlobalDefaults → ExpandVars → Validate.
+- `sesh init <shell>` emits embedded shell snippets from `internal/init/scripts/`; never spawns.
+- `sesh up` (no args) reads `$SESH_PROJECT`; explicit arg always wins.
 
 ## Non-obvious gotchas
 
