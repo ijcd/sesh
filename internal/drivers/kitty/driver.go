@@ -2,6 +2,7 @@ package kitty
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +13,23 @@ import (
 
 type Driver struct {
 	r Runner
+}
+
+type kittyOSWindow struct {
+	IsFocused bool       `json:"is_focused"`
+	Tabs      []kittyTab `json:"tabs"`
+}
+type kittyTab struct {
+	Title   string        `json:"title"`
+	Windows []kittyWindow `json:"windows"`
+}
+type kittyWindow struct {
+	IsFocused           bool                  `json:"is_focused"`
+	Cwd                 string                `json:"cwd"`
+	ForegroundProcesses []kittyForegroundProc `json:"foreground_processes"`
+}
+type kittyForegroundProc struct {
+	Cmdline []string `json:"cmdline"`
 }
 
 func New() *Driver {
@@ -121,7 +139,27 @@ func (d *Driver) Down(ctx context.Context, name string) error {
 }
 
 func (d *Driver) Status(ctx context.Context, name string) (drivers.Status, error) {
-	return drivers.StatusUnknown, nil
+	r, err := d.runner()
+	if err != nil {
+		return drivers.StatusUnknown, err
+	}
+	out, err := r.RunCapture(ctx, "ls")
+	if err != nil {
+		return drivers.StatusUnknown, fmt.Errorf("kitten ls: %w", err)
+	}
+	var wins []kittyOSWindow
+	if err := json.Unmarshal([]byte(out), &wins); err != nil {
+		return drivers.StatusUnknown, fmt.Errorf("parse kitten ls: %w", err)
+	}
+	prefix := name + ":"
+	for _, w := range wins {
+		for _, t := range w.Tabs {
+			if strings.HasPrefix(t.Title, prefix) {
+				return drivers.StatusExists, nil
+			}
+		}
+	}
+	return drivers.StatusNotExists, nil
 }
 
 func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
