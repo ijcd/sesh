@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-v0.1 in Go (`cmd/sesh`); `bin/sesh` is the retired Python prototype kept for reference.
+v0.2 in Go (`cmd/sesh`) — tmux + kitty drivers; `bin/sesh` is the retired Python prototype kept for reference.
 
 ## What this is
 
@@ -50,6 +50,14 @@ When extending driver support, **update `VALID_PAIRS` and the `validate()` funct
 ### Capture is suggest-only
 
 `sesh capture` reads kitty's `@ ls` output, normalizes captured cmdlines (e.g., `tmux -L overmind-XXX...` → `overmind start` via `normalize_cmdline()`), and prints a draft JSON entry to stdout. It never writes to the config — the user pastes. Preserve this contract when extending capture (e.g., to other plugins).
+
+### Kitty driver specifics
+
+- Tab title prefix `<project>:<tab>` is the project ↔ tabs association (no native session concept).
+- `KITTY_LISTEN_ON` is read lazily inside Driver.Up/Down/Status/Capture (not at New() time), so cmd-layer `--launch` can set the env before engine.Up runs.
+- Layout vocab is per-driver verbatim: kitty layouts (`splits`, `tall`, `fat`, `grid`, `horizontal`, `vertical`, `stack`).
+- Cross-driver dispatch for kitty/tmux happens in `engine.Up` via `transformCrossDriverTabs` — the inner tmux session is created first, then the outer kitty tab launches with `cmd: tmux attach -t <inner-name>`.
+- State for `--launch`'d kitty instances lives in `~/.local/state/sesh/state.json` (atomic write under flock).
 
 ## Non-obvious gotchas
 

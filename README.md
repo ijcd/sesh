@@ -14,16 +14,22 @@ SPI for each surface area.
 
 ## Status
 
-**Pre-v1.** Go reimplementation of the tmux layer in progress, targeting tmuxinator-derived feature parity. Multi-driver future (kitty/wezterm/editor/browser/comms/Spaces) preserved in the design but unbuilt. Python prototype in `bin/sesh` retained as design reference.
+**Pre-v1.** v0.2: tmux + kitty drivers, all three containment pairs (kitty/leaf, kitty/tmux, kitty/kitty). `--launch` flag spawns a fresh kitty when not already inside one. Plugin SPI for editor/browser/comms/Spaces is designed but unbuilt.
 
 ## Quick start
 
 ```sh
 go build -o sesh ./cmd/sesh
-./sesh new my-project
-./sesh edit my-project
-./sesh up my-project
-./sesh debug my-project        # see resolved spec + tmux commands
+
+# Tmux example
+./sesh new my-tmux-project
+./sesh edit my-tmux-project        # set driver: tmux
+./sesh up my-tmux-project
+
+# Kitty example (run from inside a kitty terminal, or use --launch)
+./sesh new my-kitty-project
+./sesh edit my-kitty-project        # set driver: kitty
+./sesh up my-kitty-project --launch
 ```
 
 Project files live at `~/.config/sesh/projects/<name>.yml`. Reusable templates live at `~/.config/sesh/templates/`. See [docs/superpowers/specs/](docs/superpowers/specs/) for the v0.1 design.
@@ -50,12 +56,12 @@ and uses procedural macros rather than typed primitives. Cannot be extended.
 
 ## Roadmap
 
-- **v0.1** (current): tmux driver, tmuxinator parity
-- **v0.2**: kitty driver
-- **v0.3**: plugin SPI definition, first non-terminal plugin (editor — emacs)
-- **v0.4**: browser plugin (Chrome/Arc/Safari)
-- **v0.5**: Mission Control Spaces plugin (macOS)
-- **v1.0**: comms plugins (Slack, Notion), templating, docs, packaging
+- **v0.1**: terminal driver(s), tmux, capture, basic launch
+- **v0.2** (current): kitty driver, --launch, full containment, ~160 tests
+- **v0.3**: validation hardening, `down` cleanup edge cases, plugin SPI definition
+- **v0.4**: first non-terminal plugin (editor — emacs)
+- **v0.5**: browser plugin
+- **v1.0**: comms + Spaces + templating + packaging
 
 ## License
 
