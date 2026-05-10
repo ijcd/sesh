@@ -116,3 +116,30 @@ func TestDriver_Status_RunnerError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestDriver_Down_ClosesProjectTabs(t *testing.T) {
+	fr := &fakeRunner{}
+	d := newWith(fr)
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
+	if err := d.Down(context.Background(), "demo"); err != nil {
+		t.Fatal(err)
+	}
+	if len(fr.runs) != 1 {
+		t.Fatalf("expected 1 run, got %d: %v", len(fr.runs), fr.runs)
+	}
+	if !strings.Contains(fr.runs[0], "close-tab") {
+		t.Errorf("expected close-tab: %s", fr.runs[0])
+	}
+	if !strings.Contains(fr.runs[0], "tab_title:^demo\\:.*$") {
+		t.Errorf("expected prefix match for demo: %s", fr.runs[0])
+	}
+}
+
+func TestDriver_Down_RunnerErrorSurfaced(t *testing.T) {
+	fr := &fakeRunner{runErr: errors.New("nope")}
+	d := newWith(fr)
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
+	if err := d.Down(context.Background(), "demo"); err == nil {
+		t.Fatal("expected error")
+	}
+}

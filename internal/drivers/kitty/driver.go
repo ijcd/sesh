@@ -135,7 +135,11 @@ func splitKittenCommand(line string) ([]string, error) {
 var _ drivers.Driver = (*Driver)(nil)
 
 func (d *Driver) Down(ctx context.Context, name string) error {
-	return fmt.Errorf("kitty: Down not yet implemented")
+	r, err := d.runner()
+	if err != nil {
+		return err
+	}
+	return r.Run(ctx, "close-tab", "--match", MatchTabTitlePrefix(name))
 }
 
 func (d *Driver) Status(ctx context.Context, name string) (drivers.Status, error) {
