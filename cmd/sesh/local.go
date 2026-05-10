@@ -14,6 +14,7 @@ import (
 
 func newLocalCmd(e *engine.Engine) *cobra.Command {
 	var force bool
+	var launchFlag bool
 	cmd := &cobra.Command{
 		Use:   "local",
 		Short: "Run ./.sesh.yml from the current directory",
@@ -30,15 +31,25 @@ func newLocalCmd(e *engine.Engine) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := e.Up(context.Background(), p, force); err != nil {
+			if err := requiresKitty(p, launchFlag); err != nil {
+				return err
+			}
+			ctx := context.Background()
+			if needsLaunch(p, launchFlag) {
+				if err := performLaunch(ctx, p); err != nil {
+					return err
+				}
+			}
+			if err := e.Up(ctx, p, force); err != nil {
 				return err
 			}
 			if p.Attach == nil || *p.Attach {
-				return attachToTmux(p)
+				return attachIfTmux(p)
 			}
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Down + Up if a session already exists")
+	cmd.Flags().BoolVar(&launchFlag, "launch", false, "Spawn a new kitty if not already inside one (kitty driver only)")
 	return cmd
 }
