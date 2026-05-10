@@ -95,3 +95,27 @@ func TestDriver_DryRun_ReturnsSameAsBuildCommands(t *testing.T) {
 		t.Errorf("DryRun returned no commands")
 	}
 }
+
+func TestDriver_AttachCommand_DefaultSlug(t *testing.T) {
+	d := New()
+	p := &spec.Project{Name: "Liberties Demo", Driver: "tmux"}
+	cmd, err := d.AttachCommand(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd != "tmux attach -t liberties-demo" {
+		t.Errorf("AttachCommand = %q, want %q", cmd, "tmux attach -t liberties-demo")
+	}
+}
+
+func TestDriver_AttachCommand_ExplicitSession(t *testing.T) {
+	d := New()
+	p := &spec.Project{Name: "x", Driver: "tmux", Session: "custom-sess"}
+	cmd, err := d.AttachCommand(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd != "tmux attach -t custom-sess" {
+		t.Errorf("AttachCommand = %q", cmd)
+	}
+}

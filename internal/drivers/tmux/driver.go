@@ -86,6 +86,15 @@ func (d *Driver) DryRun(p *spec.Project) ([]string, error) {
 	return BuildCommands(p)
 }
 
+// AttachCommand returns "tmux attach -t <session>" for the project.
+func (d *Driver) AttachCommand(p *spec.Project) (string, error) {
+	sess := p.Session
+	if sess == "" {
+		sess = Slug(p.Name)
+	}
+	return fmt.Sprintf("tmux attach -t %s", sess), nil
+}
+
 // splitTmuxCommand parses a `tmux ...` line back into argv. We use single-quoted
 // values throughout BuildCommands, so a simple state-machine works.
 func splitTmuxCommand(line string) ([]string, error) {

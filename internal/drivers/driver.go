@@ -32,4 +32,10 @@ type Driver interface {
 	// DryRun returns the exact shell commands Up would execute, as strings.
 	// Used by `sesh debug`.
 	DryRun(p *spec.Project) ([]string, error)
+
+	// AttachCommand returns the shell command a parent driver should run to
+	// attach to (host) this driver's container. Returns error if the driver
+	// has no externally-attachable concept (e.g., kitty has no detached
+	// sessions). Used by engine for cross-driver tab dispatch.
+	AttachCommand(p *spec.Project) (string, error)
 }
