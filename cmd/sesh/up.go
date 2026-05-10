@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -14,11 +16,21 @@ func newUpCmd(e *engine.Engine) *cobra.Command {
 	var force bool
 	var launchFlag bool
 	cmd := &cobra.Command{
-		Use:   "up <name>",
+		Use:   "up [name]",
 		Short: "Launch a project",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			p, err := config.Load(args[0], e.Drivers(), nil)
+			var name string
+			switch len(args) {
+			case 1:
+				name = args[0]
+			case 0:
+				name = os.Getenv("SESH_PROJECT")
+				if name == "" {
+					return fmt.Errorf("sesh up requires a project name or $SESH_PROJECT env var (set by direnv or shell)")
+				}
+			}
+			p, err := config.Load(name, e.Drivers(), nil)
 			if err != nil {
 				return err
 			}
