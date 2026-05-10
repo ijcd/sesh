@@ -99,3 +99,56 @@ tabs: [{title: shell}]
 		t.Errorf("project's tmux should win over global's kitty, got %q", p.Driver)
 	}
 }
+
+func TestApplyGlobalDefaults_VarsMerged(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", base)
+	cfgDir := filepath.Join(base, "sesh")
+	os.MkdirAll(cfgDir, 0o755)
+	os.WriteFile(filepath.Join(cfgDir, "config.yml"), []byte(`driver: tmux
+vars:
+  b: "2"
+`), 0o644)
+	projDir := filepath.Join(cfgDir, "projects")
+	os.MkdirAll(projDir, 0o755)
+	os.WriteFile(filepath.Join(projDir, "p.yml"), []byte(`vars:
+  a: "1"
+tabs: [{title: shell}]
+`), 0o644)
+
+	p, err := Load("p", []string{"tmux"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Vars["a"] != "1" {
+		t.Errorf("project var a = %q, want 1", p.Vars["a"])
+	}
+	if p.Vars["b"] != "2" {
+		t.Errorf("global var b = %q, want 2", p.Vars["b"])
+	}
+}
+
+func TestApplyGlobalDefaults_ProjectVarWinsOverGlobal(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", base)
+	cfgDir := filepath.Join(base, "sesh")
+	os.MkdirAll(cfgDir, 0o755)
+	os.WriteFile(filepath.Join(cfgDir, "config.yml"), []byte(`driver: tmux
+vars:
+  a: "global"
+`), 0o644)
+	projDir := filepath.Join(cfgDir, "projects")
+	os.MkdirAll(projDir, 0o755)
+	os.WriteFile(filepath.Join(projDir, "p.yml"), []byte(`vars:
+  a: "project"
+tabs: [{title: shell}]
+`), 0o644)
+
+	p, err := Load("p", []string{"tmux"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Vars["a"] != "project" {
+		t.Errorf("project var should win: a = %q, want project", p.Vars["a"])
+	}
+}
