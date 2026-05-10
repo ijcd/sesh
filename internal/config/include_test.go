@@ -72,9 +72,6 @@ func TestResolveInclude_Cycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Bridge: rename Extends to Include for the cycle fixtures.
-	a.Include = []string{a.Extends}
-	a.Extends = ""
 	_, err = ResolveInclude(a, aPath)
 	if err == nil {
 		t.Fatal("expected cycle error")

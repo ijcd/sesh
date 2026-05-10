@@ -1,1 +1,1 @@
-extends: ./a.yml
+include: ./a.yml

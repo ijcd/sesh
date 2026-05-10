@@ -1,4 +1,4 @@
-extends: middle
+include: middle
 hooks:
   pre: ["leaf-pre"]
 tabs:
