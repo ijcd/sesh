@@ -49,7 +49,7 @@ sesh down hello     # tears it down
 | `sesh --version` | Print version. |
 
 Project files: `~/.config/sesh/projects/<name>.yml`.
-Templates (referenced via `extends:`): `~/.config/sesh/templates/<name>.yml`.
+Templates (referenced via `include:`): `~/.config/sesh/templates/<name>.yml`.
 Per-repo: `./.sesh.yml` (used by `sesh local`).
 
 ## Examples
@@ -174,7 +174,7 @@ tabs:
 
 Lookup order: `vars:` > process env > error. Escape: `$${LITERAL}` renders as `${LITERAL}`.
 
-### 6. Templates with `extends:`
+### 6. Templates with `include:`
 
 For N projects of the same shape (10 Phoenix apps, 5 Rails apps), put the shape in a template and parameterize per-project.
 
@@ -200,7 +200,7 @@ tabs:
 
 ```yaml
 # ~/.config/sesh/projects/liberties.yml
-extends: phoenix
+include: phoenix
 cwd: ~/work/liberties
 vars:
   DB_NAME: liberties_dev
@@ -209,7 +209,7 @@ vars:
 
 ```yaml
 # ~/.config/sesh/projects/paramount.yml
-extends: phoenix
+include: phoenix
 cwd: ~/work/paramount
 vars:
   DB_NAME: paramount_dev
@@ -243,11 +243,65 @@ sesh local              # picks up ./.sesh.yml from CWD
 sesh local --launch     # ditto, spawn kitty if needed
 ```
 
+## Discovery hook (`sesh init`)
+
+Add to your shell rc to be told when you cd into a sesh project:
+
+```sh
+# zsh, bash, or fish
+eval "$(sesh init zsh)"
+```
+
+Prints `sesh: project here — \`sesh local\` to launch` once per project per shell session. Never spawns anything.
+
+## direnv integration
+
+Two touchpoints, both lightweight.
+
+**Direnv tells sesh which project to launch:**
+
+```sh
+# .envrc
+export SESH_PROJECT=liberties
+```
+
+Then `sesh up` (no args, anywhere in the directory) launches `liberties`. Explicit `sesh up <name>` always wins.
+
+**Sesh ensures direnv's env is loaded before spawning:**
+
+```yaml
+hooks:
+  pre: [direnv allow]
+```
+
+The two compose: direnv handles env, sesh handles windows; the discovery hook bridges "you're entering a project" awareness.
+
+## Migrating from `extends:` (v0.2 → v0.3)
+
+`extends:` was renamed to `include:` and gained list semantics:
+
+```yaml
+# v0.2
+extends: phoenix
+
+# v0.3 (single)
+include: phoenix
+
+# v0.3 (multiple — new)
+include:
+  - phoenix
+  - hooks/direnv
+  - hooks/notify-slack
+```
+
+Loading a project file with `extends:` produces a clear error pointing at `include:`. Templates in `~/.config/sesh/templates/` work exactly as before.
+
 ## Schema reference
 
 | Key | Type | Notes |
 |---|---|---|
-| `extends` | string | Template name (resolved as `~/.config/sesh/templates/<name>.yml`) or `./relative.yml` path. Single-inheritance, transitive chain, cycle-detected. |
+| `include` | string \| list | Template or relative path to merge. Scalar or list; resolves as `~/.config/sesh/templates/<name>.yml` or `./relative.yml`. Depth-first left-to-right, cycle-detected. |
+| `extends` | string | Deprecated (v0.2). Use `include:` instead. |
 | `driver` | `tmux` \| `kitty` | Default `tmux`. |
 | `cwd` | path | Project root. `~` and `${VAR}` expanded. |
 | `session` | string | Override tmux session name (default: slugged project name). |
@@ -271,7 +325,7 @@ sesh local --launch     # ditto, spawn kitty if needed
 | `tabs[].panes[].cwd` | path | Default = tab cwd. Relative path joins parent. |
 | `drop: true` | on tab/pane | Sentinel — remove this entry from the inherited template. |
 
-**Merge rules** (when `extends:` is used):
+**Merge rules** (when `include:` is used):
 
 | Shape | Rule |
 |---|---|
@@ -295,16 +349,16 @@ There's no mature open-source tool that orchestrates a multi-app project workspa
 
 ## Status
 
-**Pre-v1.** v0.2 ships tmux + kitty drivers with all three containment pairs (kitty/leaf, kitty/tmux, kitty/kitty), `--launch` for non-kitty terminals, ~216 tests, full tmuxinator feature parity for the tmux layer. Editor / browser / comms / Spaces plugins are designed but unbuilt.
+**Pre-v1.** v0.3: tmux + kitty drivers, `include:` composition, global defaults file, `sesh init` discovery hook, `$SESH_PROJECT` direnv connector. ~250 tests.
 
 ## Roadmap
 
 - **v0.1** — tmux driver, tmuxinator parity ✓
-- **v0.2** — kitty driver, `--launch`, full containment ✓
-- **v0.3** — plugin SPI definition, distribution (brew tap), polish
-- **v0.4** — first non-terminal plugin (editor — emacs)
+- **v0.2** — kitty driver, --launch, full containment ✓
+- **v0.3** (current) — global config, include:, sesh init, direnv connector
+- **v0.4** — plugin SPI definition; first non-terminal plugin (editor — emacs)
 - **v0.5** — browser plugin
-- **v1.0** — comms + Spaces + templating extensions + packaging
+- **v1.0** — comms + Spaces + packaging
 
 ## License
 
