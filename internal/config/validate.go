@@ -33,6 +33,13 @@ func Validate(p *spec.Project, registeredDrivers []string) []error {
 			Reason: fmt.Sprintf("driver %q not registered (v0.1: %v)", p.Driver, registeredDrivers)})
 	}
 
+	if p.Extends != "" {
+		errs = append(errs, ValidationError{
+			Path:   "extends",
+			Reason: "extends: is no longer supported (sesh v0.3+); rename to include:",
+		})
+	}
+
 	if len(p.Tabs) == 0 {
 		errs = append(errs, ValidationError{Path: "tabs", Reason: "at least one tab is required"})
 	}

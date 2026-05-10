@@ -98,3 +98,21 @@ func TestValidate_RequiresAtLeastOneTab(t *testing.T) {
 		t.Errorf("expected 'tabs: at least one' error, got %v", errs)
 	}
 }
+
+func TestValidate_ExtendsErrors(t *testing.T) {
+	p := &spec.Project{
+		Extends: "phoenix",
+		Driver:  "tmux",
+		Tabs:    []spec.Tab{{Title: "shell"}},
+	}
+	errs := Validate(p, []string{"tmux"})
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "extends:") && strings.Contains(e.Error(), "include:") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected error mentioning extends: → include: migration; got %v", errs)
+	}
+}
