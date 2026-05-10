@@ -167,10 +167,6 @@ func (d *Driver) Status(ctx context.Context, name string) (drivers.Status, error
 	return drivers.StatusNotExists, nil
 }
 
-func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
-	return nil, nil
-}
-
 func (d *Driver) Validate(p *spec.Project) []error {
 	var errs []error
 	for i, t := range p.Tabs {
