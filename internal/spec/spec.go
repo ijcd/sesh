@@ -24,7 +24,8 @@ func (s *StringList) UnmarshalYAML(b []byte) error {
 // Fields use omitempty so unset values round-trip cleanly.
 type Project struct {
 	Name          string            `yaml:"-"` // = file basename (set by loader)
-	Extends       string            `yaml:"extends,omitempty"`
+	Include       StringList        `yaml:"include,omitempty"`
+	Extends       string            `yaml:"extends,omitempty"` // deprecated; validate.go errors if set
 	Cwd           string            `yaml:"cwd,omitempty"`
 	Driver        string            `yaml:"driver,omitempty"`
 	Session       string            `yaml:"session,omitempty"`

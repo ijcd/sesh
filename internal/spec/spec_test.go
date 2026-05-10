@@ -128,3 +128,48 @@ tabs:
 		t.Errorf("panes[0].title = %q", p.Tabs[1].Panes[0].Title)
 	}
 }
+
+func TestProject_UnmarshalYAML_IncludeScalar(t *testing.T) {
+	in := []byte(`
+include: phoenix
+cwd: /tmp
+tabs: [{title: shell}]
+`)
+	var p Project
+	if err := yaml.Unmarshal(in, &p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Include) != 1 || p.Include[0] != "phoenix" {
+		t.Errorf("Include = %v, want [phoenix]", p.Include)
+	}
+}
+
+func TestProject_UnmarshalYAML_IncludeList(t *testing.T) {
+	in := []byte(`
+include: [phoenix, hooks/direnv, hooks/notify]
+cwd: /tmp
+tabs: [{title: shell}]
+`)
+	var p Project
+	if err := yaml.Unmarshal(in, &p); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Include) != 3 || p.Include[2] != "hooks/notify" {
+		t.Errorf("Include = %v", p.Include)
+	}
+}
+
+func TestProject_UnmarshalYAML_ExtendsStillParses(t *testing.T) {
+	// extends: must still parse so validate.go can error on it with a useful message
+	in := []byte(`extends: phoenix
+cwd: /tmp
+tabs: [{title: shell}]
+`)
+	var p Project
+	if err := yaml.Unmarshal(in, &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.Extends != "phoenix" {
+		t.Errorf("Extends = %q, want phoenix", p.Extends)
+	}
+}
