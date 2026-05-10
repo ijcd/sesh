@@ -3,6 +3,7 @@ package kitty
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -145,6 +146,9 @@ func TestDriver_Down_RunnerErrorSurfaced(t *testing.T) {
 }
 
 func TestDriver_Validate_OK(t *testing.T) {
+	if _, err := exec.LookPath("kitten"); err != nil {
+		t.Skip("kitten not installed")
+	}
 	d := New()
 	p := &spec.Project{Driver: "kitty", Tabs: []spec.Tab{{Title: "shell"}}}
 	if errs := d.Validate(p); len(errs) > 0 {
