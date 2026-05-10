@@ -79,14 +79,3 @@ func absOrEmpty(p string) string {
 	}
 	return a
 }
-
-// ResolveExtends is a backwards-compatibility wrapper; delegates to ResolveInclude.
-// Callers are updated in T3; this shim keeps the build green during the transition.
-func ResolveExtends(child *spec.Project, childPath string) (*spec.Project, error) {
-	// If the project uses Extends (old schema), promote it to Include.
-	if child.Extends != "" && len(child.Include) == 0 {
-		child.Include = []string{child.Extends}
-		child.Extends = ""
-	}
-	return ResolveInclude(child, childPath)
-}

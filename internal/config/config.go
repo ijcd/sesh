@@ -25,7 +25,7 @@ func LoadFromPath(path string, registeredDrivers []string, envOverride map[strin
 	if err != nil {
 		return nil, err
 	}
-	resolved, err := ResolveExtends(raw, path)
+	resolved, err := ResolveInclude(raw, path)
 	if err != nil {
 		return nil, err
 	}
