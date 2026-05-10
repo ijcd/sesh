@@ -32,6 +32,7 @@ func newRootCmd() *cobra.Command {
 		newCaptureCmd(e),
 		newLocalCmd(e),
 		newValidateCmd(e),
+		newInitCmd(),
 	)
 	return cmd
 }
