@@ -143,3 +143,44 @@ func TestDriver_Down_RunnerErrorSurfaced(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestDriver_Validate_OK(t *testing.T) {
+	d := New()
+	p := &spec.Project{Driver: "kitty", Tabs: []spec.Tab{{Title: "shell"}}}
+	if errs := d.Validate(p); len(errs) > 0 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
+}
+
+func TestDriver_Validate_BadLayout(t *testing.T) {
+	d := New()
+	p := &spec.Project{Driver: "kitty", Tabs: []spec.Tab{{
+		Title: "x", Layout: "main-vertical",
+		Panes: []spec.Pane{{Title: "p", Cmd: "y"}},
+	}}}
+	errs := d.Validate(p)
+	if len(errs) == 0 {
+		t.Fatal("expected layout error")
+	}
+	if !anyErrorContains(errs, "main-vertical") {
+		t.Errorf("error should mention bad layout: %v", errs)
+	}
+}
+
+func TestDriver_Validate_TabTitleWithColon(t *testing.T) {
+	d := New()
+	p := &spec.Project{Driver: "kitty", Tabs: []spec.Tab{{Title: "with:colon"}}}
+	errs := d.Validate(p)
+	if len(errs) == 0 {
+		t.Fatal("expected error for colon in tab title")
+	}
+}
+
+func anyErrorContains(errs []error, substr string) bool {
+	for _, e := range errs {
+		if strings.Contains(e.Error(), substr) {
+			return true
+		}
+	}
+	return false
+}

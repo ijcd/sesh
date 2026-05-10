@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/ijcd/sesh/internal/drivers"
@@ -170,7 +171,21 @@ func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
 	return nil, nil
 }
 
-func (d *Driver) Validate(p *spec.Project) []error { return nil }
+func (d *Driver) Validate(p *spec.Project) []error {
+	var errs []error
+	for i, t := range p.Tabs {
+		if strings.Contains(t.Title, ":") {
+			errs = append(errs, fmt.Errorf("tabs[%d].title: must not contain ':' (sesh uses '<project>:<tab>' tagging)", i))
+		}
+		if err := ValidateLayout(t.Layout); err != nil {
+			errs = append(errs, fmt.Errorf("tabs[%d].layout: %w", i, err))
+		}
+	}
+	if _, err := exec.LookPath("kitten"); err != nil {
+		errs = append(errs, fmt.Errorf("kitty driver: %w", err))
+	}
+	return errs
+}
 
 func (d *Driver) AttachCommand(p *spec.Project) (string, error) {
 	return "", fmt.Errorf("kitty: AttachCommand not supported (kitty has no detached sessions)")
