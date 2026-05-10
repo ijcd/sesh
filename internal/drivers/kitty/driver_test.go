@@ -176,6 +176,18 @@ func TestDriver_Validate_TabTitleWithColon(t *testing.T) {
 	}
 }
 
+func TestDriver_AttachCommand_NotSupported(t *testing.T) {
+	d := New()
+	p := &spec.Project{Name: "x", Driver: "kitty"}
+	_, err := d.AttachCommand(p)
+	if err == nil {
+		t.Fatal("expected error — kitty has no attach")
+	}
+	if !strings.Contains(err.Error(), "kitty") {
+		t.Errorf("error should mention kitty: %v", err)
+	}
+}
+
 func anyErrorContains(errs []error, substr string) bool {
 	for _, e := range errs {
 		if strings.Contains(e.Error(), substr) {
