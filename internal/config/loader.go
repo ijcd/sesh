@@ -39,14 +39,15 @@ func ResolveProjectPath(name string) (string, error) {
 }
 
 // ResolveTemplatePath returns the absolute path of a template file given its name
-// or relative path. Names containing '/' or starting with './' resolve relative
-// to baseDir. Bare names resolve to <config>/templates/<name>.yml.
+// or relative path. Paths starting with './' or '../' resolve relative to baseDir.
+// Absolute paths are returned as-is. All other names (including subdirectory names
+// like "hooks/direnv") resolve to <config>/templates/<name>.yml.
 func ResolveTemplatePath(nameOrPath, baseDir string) (string, error) {
-	if strings.HasPrefix(nameOrPath, "./") || strings.HasPrefix(nameOrPath, "../") || strings.Contains(nameOrPath, "/") {
-		if filepath.IsAbs(nameOrPath) {
-			return nameOrPath, nil
-		}
+	if strings.HasPrefix(nameOrPath, "./") || strings.HasPrefix(nameOrPath, "../") {
 		return filepath.Clean(filepath.Join(baseDir, nameOrPath)), nil
+	}
+	if filepath.IsAbs(nameOrPath) {
+		return nameOrPath, nil
 	}
 	base, err := configDir()
 	if err != nil {

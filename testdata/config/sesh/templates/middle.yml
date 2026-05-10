@@ -1,4 +1,4 @@
-extends: base
+include: base
 hooks:
   pre: ["middle-pre"]
 tabs:
