@@ -19,12 +19,6 @@ func ResolveInclude(child *spec.Project, childPath string) (*spec.Project, error
 }
 
 func resolveIncludeWithVisited(child *spec.Project, childPath string, visited map[string]bool) (*spec.Project, error) {
-	// Interim compat: promote Extends → Include so cycle detection works even when
-	// individual fixtures haven't been migrated yet (T5 migrates them wholesale).
-	if len(child.Include) == 0 && child.Extends != "" {
-		child.Include = []string{child.Extends}
-		child.Extends = ""
-	}
 	if len(child.Include) == 0 {
 		return child, nil
 	}
