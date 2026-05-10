@@ -49,3 +49,34 @@ func TestSmoke_NewLsValidateDebug(t *testing.T) {
 		t.Fatalf("debug: %v\n%s", err, out)
 	}
 }
+
+func TestSmoke_KittyValidateAndDebug(t *testing.T) {
+	if _, err := exec.LookPath("kitten"); err != nil {
+		t.Skip("kitten not on PATH")
+	}
+	cfg := t.TempDir()
+	env := map[string]string{"XDG_CONFIG_HOME": cfg}
+
+	// sesh new <name> creates a tmux project by default; manually craft a kitty one
+	projDir := filepath.Join(cfg, "sesh", "projects")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	kittyYaml := `driver: kitty
+cwd: /tmp
+tabs:
+  - title: shell
+  - title: dev
+    cmd: echo dev
+`
+	if err := os.WriteFile(filepath.Join(projDir, "ktest.yml"), []byte(kittyYaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if out, err := runSesh(t, env, "validate", "ktest"); err != nil {
+		t.Fatalf("validate: %v\n%s", err, out)
+	}
+	if out, err := runSesh(t, env, "debug", "ktest"); err != nil {
+		t.Fatalf("debug: %v\n%s", err, out)
+	}
+}
