@@ -12,6 +12,9 @@ import (
 // childPath is the absolute path of `child` (used as base for relative include
 // values). Pass "" if the child wasn't loaded from disk.
 func ResolveInclude(child *spec.Project, childPath string) (*spec.Project, error) {
+	if child.Extends != "" {
+		return nil, fmt.Errorf("extends: is no longer supported (sesh v0.3+); rename to include:")
+	}
 	if len(child.Include) == 0 {
 		return child, nil
 	}

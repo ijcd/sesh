@@ -66,6 +66,40 @@ func TestResolveInclude_NoInclude(t *testing.T) {
 	}
 }
 
+func TestResolveInclude_ExtendsAloneErrors(t *testing.T) {
+	p, err := LoadFile(filepath.Join("..", "..", "testdata", "config", "projects", "leaf.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Inject extends: to simulate a project with extends: only (no include:)
+	p.Include = nil
+	p.Extends = "middle"
+	_, err = ResolveInclude(p, "")
+	if err == nil {
+		t.Fatal("expected error for extends:")
+	}
+	if !strings.Contains(err.Error(), "extends:") {
+		t.Errorf("error should mention extends:: %v", err)
+	}
+}
+
+func TestResolveInclude_ExtendsPlusIncludeErrors(t *testing.T) {
+	leafPath := filepath.Join("..", "..", "testdata", "config", "sesh", "projects", "leaf.yml")
+	p, err := LoadFile(leafPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// include: already set from leaf.yml; add extends: too
+	p.Extends = "middle"
+	_, err = ResolveInclude(p, leafPath)
+	if err == nil {
+		t.Fatal("expected error when both include: and extends: are present")
+	}
+	if !strings.Contains(err.Error(), "extends:") {
+		t.Errorf("error should mention extends:: %v", err)
+	}
+}
+
 func TestResolveInclude_Cycle(t *testing.T) {
 	aPath := filepath.Join("..", "..", "testdata", "config", "cycle", "a.yml")
 	a, err := LoadFile(aPath)
