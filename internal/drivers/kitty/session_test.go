@@ -103,3 +103,105 @@ func TestBuildCommands_ErrorOnNoTabs(t *testing.T) {
 		t.Fatal("expected error on no tabs")
 	}
 }
+
+func TestBuildCommands_MultiPaneTab(t *testing.T) {
+	p := &spec.Project{
+		Name: "demo", Driver: "kitty", Cwd: "/tmp",
+		Tabs: []spec.Tab{{Title: "dev", Driver: "kitty",
+			Panes: []spec.Pane{
+				{Title: "p1", Cmd: "x"},
+				{Title: "p2", Cmd: "y"},
+				{Title: "p3", Cmd: "z"},
+			}}},
+	}
+	cmds, err := BuildCommands(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmds, "\n")
+
+	// Tab launched with first pane's title set
+	if !strings.Contains(joined, `--type=tab`) {
+		t.Errorf("missing tab launch: %s", joined)
+	}
+	// First pane: send command via --hold + sh -c wrap on tab launch (no separate split-window for pane 1)
+	if !strings.Contains(joined, `-- /bin/sh -c 'x'`) {
+		t.Errorf("first pane cmd should be on the tab launch with sh -c wrap: %s", joined)
+	}
+	// First pane window-title must be set after launch (match arg is quoted)
+	if !strings.Contains(joined, `set-window-title --match 'tab_title:^demo\:dev$'`) {
+		t.Errorf("first pane title not set: %s", joined)
+	}
+
+	// Second + third pane: split-window via launch --type=window
+	splits := 0
+	for _, c := range cmds {
+		if strings.Contains(c, "launch --type=window") {
+			splits++
+		}
+	}
+	if splits != 2 {
+		t.Errorf("expected 2 split-window cmds for 3 panes, got %d", splits)
+	}
+
+	// Layout default = splits when panes present
+	foundLayout := false
+	for _, c := range cmds {
+		if strings.Contains(c, "goto-layout") && strings.Contains(c, "splits") {
+			foundLayout = true
+		}
+	}
+	if !foundLayout {
+		t.Errorf("expected goto-layout splits: %s", joined)
+	}
+}
+
+func TestBuildCommands_MultiPaneTabRespectsLayout(t *testing.T) {
+	p := &spec.Project{
+		Name: "demo", Driver: "kitty", Cwd: "/tmp",
+		Tabs: []spec.Tab{{Title: "dev", Driver: "kitty", Layout: "tall",
+			Panes: []spec.Pane{{Title: "p1", Cmd: "x"}, {Title: "p2", Cmd: "y"}}}},
+	}
+	cmds, _ := BuildCommands(p)
+	found := false
+	for _, c := range cmds {
+		if strings.Contains(c, "goto-layout") && strings.Contains(c, "tall") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected goto-layout tall, got %s", strings.Join(cmds, "\n"))
+	}
+}
+
+func TestBuildCommands_PanesUseLocationHsplit(t *testing.T) {
+	p := &spec.Project{
+		Name: "demo", Driver: "kitty", Cwd: "/tmp",
+		Tabs: []spec.Tab{{Title: "dev", Driver: "kitty",
+			Panes: []spec.Pane{{Title: "p1", Cmd: "x"}, {Title: "p2", Cmd: "y"}}}},
+	}
+	cmds, _ := BuildCommands(p)
+	for _, c := range cmds {
+		if strings.Contains(c, "launch --type=window") && !strings.Contains(c, "--location=hsplit") {
+			t.Errorf("split-window cmd missing --location=hsplit: %s", c)
+		}
+	}
+}
+
+func TestBuildCommands_PaneCwdRelativeToTabCwd(t *testing.T) {
+	p := &spec.Project{
+		Name: "demo", Driver: "kitty", Cwd: "/home/me",
+		Tabs: []spec.Tab{{Title: "dev", Driver: "kitty", Cwd: "src",
+			Panes: []spec.Pane{
+				{Title: "p1", Cmd: "x", Cwd: "lib"},
+			}}},
+	}
+	cmds, _ := BuildCommands(p)
+	for _, c := range cmds {
+		if strings.Contains(c, "launch --type=window") {
+			if !strings.Contains(c, "--cwd='/home/me/src/lib'") {
+				t.Errorf("pane cwd should be joined: %s", c)
+			}
+		}
+	}
+}
