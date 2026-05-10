@@ -38,4 +38,9 @@ type Driver interface {
 	// has no externally-attachable concept (e.g., kitty has no detached
 	// sessions). Used by engine for cross-driver tab dispatch.
 	AttachCommand(p *spec.Project) (string, error)
+
+	// Validate runs driver-specific structural checks (layouts, etc.) and
+	// returns any violations. Engine-level validation (containment, schema)
+	// is separate; this is for driver internals.
+	Validate(p *spec.Project) []error
 }

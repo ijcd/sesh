@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -19,7 +20,7 @@ func newValidateCmd(e *engine.Engine) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := engine.CheckContainment(p); err != nil {
+			if err := e.Validate(context.Background(), p); err != nil {
 				return err
 			}
 			fmt.Printf("ok: %s (%d tab(s), driver=%s)\n", p.Name, len(p.Tabs), p.Driver)

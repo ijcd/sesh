@@ -86,6 +86,10 @@ func (d *Driver) DryRun(p *spec.Project) ([]string, error) {
 	return BuildCommands(p)
 }
 
+// Validate runs tmux-specific checks. Currently a no-op; layouts are
+// passed through to tmux without sesh-side validation.
+func (d *Driver) Validate(p *spec.Project) []error { return nil }
+
 // AttachCommand returns "tmux attach -t <session>" for the project.
 func (d *Driver) AttachCommand(p *spec.Project) (string, error) {
 	sess := p.Session

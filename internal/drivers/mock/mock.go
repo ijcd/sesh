@@ -19,6 +19,7 @@ type Driver struct {
 	DryRunVal        []string
 	AttachCommandVal string
 	AttachCommandErr error
+	ValidateErrs     []error
 }
 
 func New(name string) *Driver {
@@ -49,3 +50,5 @@ func (d *Driver) DryRun(p *spec.Project) ([]string, error)           { return d.
 func (d *Driver) AttachCommand(p *spec.Project) (string, error) {
 	return d.AttachCommandVal, d.AttachCommandErr
 }
+
+func (d *Driver) Validate(p *spec.Project) []error { return d.ValidateErrs }
