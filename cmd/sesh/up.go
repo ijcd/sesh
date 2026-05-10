@@ -12,6 +12,18 @@ import (
 	"github.com/ijcd/sesh/internal/spec"
 )
 
+// resolveUpName picks the project name from the CLI args or $SESH_PROJECT.
+// Explicit arg always wins; env var is the fallback; error when neither is set.
+func resolveUpName(args []string) (string, error) {
+	if len(args) == 1 {
+		return args[0], nil
+	}
+	if name := os.Getenv("SESH_PROJECT"); name != "" {
+		return name, nil
+	}
+	return "", fmt.Errorf("sesh up requires a project name or $SESH_PROJECT env var (set by direnv or shell)")
+}
+
 func newUpCmd(e *engine.Engine) *cobra.Command {
 	var force bool
 	var launchFlag bool
@@ -20,15 +32,9 @@ func newUpCmd(e *engine.Engine) *cobra.Command {
 		Short: "Launch a project",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var name string
-			switch len(args) {
-			case 1:
-				name = args[0]
-			case 0:
-				name = os.Getenv("SESH_PROJECT")
-				if name == "" {
-					return fmt.Errorf("sesh up requires a project name or $SESH_PROJECT env var (set by direnv or shell)")
-				}
+			name, err := resolveUpName(args)
+			if err != nil {
+				return err
 			}
 			p, err := config.Load(name, e.Drivers(), nil)
 			if err != nil {
