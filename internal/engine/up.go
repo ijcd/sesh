@@ -9,6 +9,57 @@ import (
 	"github.com/ijcd/sesh/internal/spec"
 )
 
+// transformCrossDriverTabs splits each tab whose driver differs from the project
+// driver and has panes. The inner tabs are dispatched to their child driver
+// (creating that driver's container) and the outer project is mutated so each
+// such tab becomes a leaf cmd that attaches to the inner container.
+//
+// Returns the modified project (a deep-ish copy of p) and any error.
+func (e *Engine) transformCrossDriverTabs(ctx context.Context, p *spec.Project) (*spec.Project, error) {
+	out := *p
+	out.Tabs = make([]spec.Tab, len(p.Tabs))
+	copy(out.Tabs, p.Tabs)
+
+	for i := range out.Tabs {
+		t := &out.Tabs[i]
+		childDrv := t.Driver
+		if childDrv == "" || childDrv == p.Driver || len(t.Panes) == 0 {
+			continue
+		}
+		// Cross-driver pair: dispatch inner first.
+		cd, err := e.driverFor(childDrv)
+		if err != nil {
+			return nil, err
+		}
+		innerName := slugInnerName(p.Name, t.Title)
+		innerTab := *t
+		innerTab.Driver = "" // child handles its own driver default
+		inner := &spec.Project{
+			Name: innerName, Driver: childDrv, Cwd: t.Cwd,
+			Tabs: []spec.Tab{innerTab},
+		}
+		if inner.Cwd == "" {
+			inner.Cwd = p.Cwd
+		}
+		if err := cd.Up(ctx, inner); err != nil {
+			return nil, fmt.Errorf("cross-driver up for tab %q: %w", t.Title, err)
+		}
+		attachCmd, err := cd.AttachCommand(inner)
+		if err != nil {
+			return nil, fmt.Errorf("cross-driver AttachCommand for tab %q: %w", t.Title, err)
+		}
+		// Replace the outer tab with a leaf cmd that attaches.
+		t.Cmd = attachCmd
+		t.Panes = nil
+		t.Driver = ""
+	}
+	return &out, nil
+}
+
+func slugInnerName(project, tab string) string {
+	return project + "-" + tab
+}
+
 // Up brings the project online. force=true causes Down+Up if a session exists.
 func (e *Engine) Up(ctx context.Context, p *spec.Project, force bool) error {
 	if err := CheckContainment(p); err != nil {
@@ -19,12 +70,17 @@ func (e *Engine) Up(ctx context.Context, p *spec.Project, force bool) error {
 		return err
 	}
 
-	d, err := e.driverFor(p.Driver)
+	pp, err := e.transformCrossDriverTabs(ctx, p)
 	if err != nil {
 		return err
 	}
 
-	pp := applyPreWindow(p)
+	d, err := e.driverFor(pp.Driver)
+	if err != nil {
+		return err
+	}
+
+	pp = applyPreWindow(pp)
 
 	status, err := d.Status(ctx, pp.Name)
 	if err != nil {
