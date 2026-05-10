@@ -69,7 +69,7 @@ When extending driver support, **update `VALID_PAIRS` and the `validate()` funct
 - `sesh init <shell>` emits embedded shell snippets from `internal/init/scripts/`; never spawns.
 - `sesh up` (no args) reads `$SESH_PROJECT`; explicit arg always wins.
 
-## Non-obvious gotchas
+### Legacy driver notes
 
 - **Hardcoded kitten path**: `KITTEN = "/Applications/kitty.app/Contents/MacOS/kitten"`. macOS-only; will need a lookup if/when Linux support matters.
 - **Kitty driver requires `KITTY_LISTEN_ON`**: `sesh up` (kitty driver) and `sesh capture` only work from inside a kitty window with remote control enabled. `KittyDriver.__init__` fails fast otherwise.

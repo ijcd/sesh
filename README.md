@@ -252,7 +252,7 @@ Add to your shell rc to be told when you cd into a sesh project:
 eval "$(sesh init zsh)"
 ```
 
-Prints `sesh: project here — \`sesh local\` to launch` once per project per shell session. Never spawns anything.
+Prints "sesh: project here — `sesh local` to launch" once per project per shell session. Never spawns anything.
 
 ## direnv integration
 
