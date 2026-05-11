@@ -70,37 +70,48 @@ func appendStrings(p, c spec.StringList) spec.StringList {
 	return out
 }
 
-func mergeTabs(parent, child []spec.Tab) []spec.Tab {
-	childByTitle := map[string]*spec.Tab{}
+// mergeByTitle merges two titled lists by title: child scalars win, Drop:true removes,
+// child-only entries append. mergeOne is called for matched pairs.
+func mergeByTitle[T any](parent, child []T, titleOf func(T) string, droppedOf func(T) bool, mergeOne func(T, T) T) []T {
+	childByTitle := map[string]*T{}
 	for i := range child {
-		childByTitle[child[i].Title] = &child[i]
+		t := titleOf(child[i])
+		childByTitle[t] = &child[i]
 	}
 	seen := map[string]bool{}
-	out := make([]spec.Tab, 0, len(parent)+len(child))
+	out := make([]T, 0, len(parent)+len(child))
 
 	for i := range parent {
 		p := parent[i]
-		seen[p.Title] = true
-		if c, ok := childByTitle[p.Title]; ok {
-			if c.Drop {
+		seen[titleOf(p)] = true
+		if c, ok := childByTitle[titleOf(p)]; ok {
+			if droppedOf(*c) {
 				continue
 			}
-			out = append(out, mergeTab(p, *c))
+			out = append(out, mergeOne(p, *c))
 		} else {
 			out = append(out, p)
 		}
 	}
 	for i := range child {
 		c := child[i]
-		if seen[c.Title] {
+		if seen[titleOf(c)] {
 			continue
 		}
-		if c.Drop {
+		if droppedOf(c) {
 			continue
 		}
 		out = append(out, c)
 	}
 	return out
+}
+
+func mergeTabs(parent, child []spec.Tab) []spec.Tab {
+	return mergeByTitle(parent, child,
+		func(t spec.Tab) string { return t.Title },
+		func(t spec.Tab) bool { return t.Drop },
+		mergeTab,
+	)
 }
 
 func mergeTab(p, c spec.Tab) spec.Tab {
@@ -117,36 +128,11 @@ func mergeTab(p, c spec.Tab) spec.Tab {
 }
 
 func mergePanes(parent, child []spec.Pane) []spec.Pane {
-	childByTitle := map[string]*spec.Pane{}
-	for i := range child {
-		childByTitle[child[i].Title] = &child[i]
-	}
-	seen := map[string]bool{}
-	out := make([]spec.Pane, 0, len(parent)+len(child))
-
-	for i := range parent {
-		p := parent[i]
-		seen[p.Title] = true
-		if c, ok := childByTitle[p.Title]; ok {
-			if c.Drop {
-				continue
-			}
-			out = append(out, mergePane(p, *c))
-		} else {
-			out = append(out, p)
-		}
-	}
-	for i := range child {
-		c := child[i]
-		if seen[c.Title] {
-			continue
-		}
-		if c.Drop {
-			continue
-		}
-		out = append(out, c)
-	}
-	return out
+	return mergeByTitle(parent, child,
+		func(p spec.Pane) string { return p.Title },
+		func(p spec.Pane) bool { return p.Drop },
+		mergePane,
+	)
 }
 
 func mergePane(p, c spec.Pane) spec.Pane {
