@@ -27,6 +27,7 @@ type Driver struct {
 }
 
 type kittyOSWindow struct {
+	ID        int        `json:"id"`
 	IsFocused bool       `json:"is_focused"`
 	Tabs      []kittyTab `json:"tabs"`
 }

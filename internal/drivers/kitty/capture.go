@@ -10,9 +10,8 @@ import (
 	"github.com/ijcd/sesh/internal/spec"
 )
 
-// Capture parses `kitten ls` and produces a draft *spec.Project for the
-// focused OS window. Returns an empty slice (nil error) if no OS windows are
-// present. C2 will extend this to enumerate all OS windows.
+// Capture parses `kitten ls` and produces one *spec.Project per OS window.
+// Returns an empty slice (nil error) if no OS windows are present.
 func (d *Driver) Capture(ctx context.Context) ([]*spec.Project, error) {
 	r, err := d.runner(ctx)
 	if err != nil {
@@ -29,9 +28,20 @@ func (d *Driver) Capture(ctx context.Context) ([]*spec.Project, error) {
 	if len(wins) == 0 {
 		return nil, nil
 	}
-	win := pickFocused(wins)
+	projects := make([]*spec.Project, 0, len(wins))
+	for _, win := range wins {
+		p := captureOSWindow(win)
+		projects = append(projects, p)
+	}
+	return projects, nil
+}
 
+// captureOSWindow converts a single kitty OS window into a *spec.Project.
+// Project naming: if all tabs share a common "<prefix>:" sesh tag, the prefix
+// becomes the project name; otherwise falls back to "kitty-os-<id>".
+func captureOSWindow(win kittyOSWindow) *spec.Project {
 	p := &spec.Project{Driver: "kitty"}
+	p.Name = osWindowName(win)
 	cwds := []string{}
 	for _, t := range win.Tabs {
 		title := stripPrefix(t.Title)
@@ -73,7 +83,35 @@ func (d *Driver) Capture(ctx context.Context) ([]*spec.Project, error) {
 		p.Tabs = append(p.Tabs, tab)
 	}
 	p.Cwd = mostCommonCwd(cwds)
-	return []*spec.Project{p}, nil
+	return p
+}
+
+// osWindowName returns the project name for an OS window. If all tabs share a
+// common "<prefix>:" sesh tag, that prefix is the name. Otherwise "kitty-os-<id>".
+func osWindowName(win kittyOSWindow) string {
+	if len(win.Tabs) == 0 {
+		return fmt.Sprintf("kitty-os-%d", win.ID)
+	}
+	prefix := tabTitlePrefix(win.Tabs[0].Title)
+	if prefix == "" {
+		return fmt.Sprintf("kitty-os-%d", win.ID)
+	}
+	for _, t := range win.Tabs[1:] {
+		if tabTitlePrefix(t.Title) != prefix {
+			return fmt.Sprintf("kitty-os-%d", win.ID)
+		}
+	}
+	return prefix
+}
+
+// tabTitlePrefix returns the part before the first ':' in a tab title, or ""
+// if no ':' is present.
+func tabTitlePrefix(title string) string {
+	i := strings.IndexByte(title, ':')
+	if i < 0 {
+		return ""
+	}
+	return title[:i]
 }
 
 func pickFocused(wins []kittyOSWindow) kittyOSWindow {

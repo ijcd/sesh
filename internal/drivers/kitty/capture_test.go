@@ -100,17 +100,81 @@ func TestCapture_OvermindNormalization(t *testing.T) {
 	}
 }
 
-func TestCapture_PrefersFocusedOSWindow(t *testing.T) {
+func TestCapture_TwoOSWindows(t *testing.T) {
 	fr := &fakeRunner{captureOut: `[
-      {"is_focused": false, "tabs": [{"title": "ignore:me"}]},
-      {"is_focused": true, "tabs": [
-        {"title": "demo:shell", "windows": [{"cwd": "/tmp"}]}
+      {"id": 1, "is_focused": false, "tabs": [
+        {"title": "alpha:shell", "windows": [{"cwd": "/alpha"}]}
+      ]},
+      {"id": 2, "is_focused": true, "tabs": [
+        {"title": "beta:dev", "windows": [{"cwd": "/beta"}]}
+      ]}
+    ]`}
+	d := newWith(fr)
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
+	projects, err := d.Capture(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 2 {
+		t.Fatalf("expected 2 projects, got %d", len(projects))
+	}
+	if projects[0].Name != "alpha" {
+		t.Errorf("first project name: got %q, want %q", projects[0].Name, "alpha")
+	}
+	if projects[1].Name != "beta" {
+		t.Errorf("second project name: got %q, want %q", projects[1].Name, "beta")
+	}
+}
+
+func TestCapture_NamingConsistentPrefix(t *testing.T) {
+	fr := &fakeRunner{captureOut: `[
+      {"id": 5, "is_focused": true, "tabs": [
+        {"title": "project-x:shell", "windows": [{"cwd": "/x"}]},
+        {"title": "project-x:dev",   "windows": [{"cwd": "/x"}]}
       ]}
     ]`}
 	d := newWith(fr)
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
 	projects, _ := d.Capture(context.Background())
-	if len(projects) != 1 || projects[0].Tabs[0].Title != "shell" {
-		t.Errorf("expected focused-window's tab, got %+v", projects)
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
+	}
+	if projects[0].Name != "project-x" {
+		t.Errorf("got name %q, want %q", projects[0].Name, "project-x")
+	}
+}
+
+func TestCapture_NamingNoPrefix(t *testing.T) {
+	fr := &fakeRunner{captureOut: `[
+      {"id": 7, "is_focused": true, "tabs": [
+        {"title": "shell", "windows": [{"cwd": "/home"}]}
+      ]}
+    ]`}
+	d := newWith(fr)
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
+	projects, _ := d.Capture(context.Background())
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
+	}
+	if projects[0].Name != "kitty-os-7" {
+		t.Errorf("got name %q, want %q", projects[0].Name, "kitty-os-7")
+	}
+}
+
+func TestCapture_NamingMixedPrefixes(t *testing.T) {
+	fr := &fakeRunner{captureOut: `[
+      {"id": 3, "is_focused": true, "tabs": [
+        {"title": "proj-a:shell", "windows": [{"cwd": "/a"}]},
+        {"title": "proj-b:dev",   "windows": [{"cwd": "/b"}]}
+      ]}
+    ]`}
+	d := newWith(fr)
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
+	projects, _ := d.Capture(context.Background())
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
+	}
+	if projects[0].Name != "kitty-os-3" {
+		t.Errorf("got name %q, want %q", projects[0].Name, "kitty-os-3")
 	}
 }
