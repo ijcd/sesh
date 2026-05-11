@@ -9,13 +9,13 @@ import (
 	"github.com/ijcd/sesh/internal/spec"
 )
 
-// transformCrossDriverTabs splits each tab whose driver differs from the project
+// dispatchCrossDriverTabs splits each tab whose driver differs from the project
 // driver and has panes. The inner tabs are dispatched to their child driver
 // (creating that driver's container) and the outer project is mutated so each
 // such tab becomes a leaf cmd that attaches to the inner container.
 //
 // Returns the modified project (a deep-ish copy of p) and any error.
-func (e *Engine) transformCrossDriverTabs(ctx context.Context, p *spec.Project) (*spec.Project, error) {
+func (e *Engine) dispatchCrossDriverTabs(ctx context.Context, p *spec.Project) (*spec.Project, error) {
 	out := *p
 	out.Tabs = make([]spec.Tab, len(p.Tabs))
 	copy(out.Tabs, p.Tabs)
@@ -70,7 +70,7 @@ func (e *Engine) Up(ctx context.Context, p *spec.Project, force bool) error {
 		return err
 	}
 
-	pp, err := e.transformCrossDriverTabs(ctx, p)
+	pp, err := e.dispatchCrossDriverTabs(ctx, p)
 	if err != nil {
 		return err
 	}
@@ -87,16 +87,32 @@ func (e *Engine) Up(ctx context.Context, p *spec.Project, force bool) error {
 		return fmt.Errorf("driver.Status: %w", err)
 	}
 
+	type upAction int
+	const (
+		actionAttachExisting upAction = iota
+		actionRecreate
+		actionFreshUp
+	)
+
+	action := actionFreshUp
 	switch {
 	case status == drivers.StatusExists && !force:
-		// Attach silently — driver dispatches the actual attach in Up's
-		// happy-path; here we skip Up because the session is already there.
+		action = actionAttachExisting
 	case status == drivers.StatusExists && force:
+		action = actionRecreate
+	}
+
+	switch action {
+	case actionAttachExisting:
+		// Attach silently — session already exists; driver handles attach in its Up happy-path.
+	case actionRecreate:
 		if err := d.Down(ctx, pp.Name); err != nil {
 			return fmt.Errorf("force down: %w", err)
 		}
-		fallthrough
-	default:
+		if err := d.Up(ctx, pp); err != nil {
+			return err
+		}
+	case actionFreshUp:
 		if err := d.Up(ctx, pp); err != nil {
 			return err
 		}

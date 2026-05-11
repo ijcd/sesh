@@ -62,7 +62,7 @@ func TestTransformCrossDriverTabs_TabCwdKept(t *testing.T) {
 				Panes: []spec.Pane{{Title: "p", Cmd: "x"}}},
 		},
 	}
-	_, err := e.transformCrossDriverTabs(context.Background(), p)
+	_, err := e.dispatchCrossDriverTabs(context.Background(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestTransformCrossDriverTabs_TabCwdInheritsProjectWhenEmpty(t *testing.T) {
 				Panes: []spec.Pane{{Title: "p", Cmd: "x"}}},
 		},
 	}
-	_, err := e.transformCrossDriverTabs(context.Background(), p)
+	_, err := e.dispatchCrossDriverTabs(context.Background(), p)
 	if err != nil {
 		t.Fatal(err)
 	}
