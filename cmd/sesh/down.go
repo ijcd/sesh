@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/ijcd/sesh/internal/config"
+	"github.com/ijcd/sesh/internal/drivers"
 	"github.com/ijcd/sesh/internal/engine"
 	"github.com/ijcd/sesh/internal/state"
 )
@@ -23,15 +25,19 @@ func newDownCmd(e *engine.Engine) *cobra.Command {
 			}
 			ctx := context.Background()
 
-			// If this project was launched via --launch, point KITTY_LISTEN_ON
-			// at its tracked socket so Down can talk to that kitty.
+			// If this project was launched via --launch, thread its tracked socket
+			// into ctx so the kitty driver can talk to that instance without
+			// mutating os.Setenv.
 			statePath, err := state.DefaultPath()
-			if err == nil {
-				if s, err2 := state.Load(statePath); err2 == nil {
-					if entry, ok := s.Get(p.Name); ok {
-						os.Setenv("KITTY_LISTEN_ON", "unix:"+entry.Socket)
-						defer cleanupLaunch(s, p.Name, statePath, entry.Socket)
-					}
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not resolve state path: %v; --launch cleanup skipped\n", err)
+			} else {
+				s, err := state.Load(statePath)
+				if err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not read state.json: %v; --launch cleanup skipped\n", err)
+				} else if entry, ok := s.Get(p.Name); ok {
+					ctx = drivers.WithSocketHint(ctx, "unix:"+entry.Socket)
+					defer cleanupLaunch(s, p.Name, statePath, entry.Socket)
 				}
 			}
 

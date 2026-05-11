@@ -118,6 +118,20 @@ func TestDriver_Status_RunnerError(t *testing.T) {
 	}
 }
 
+func TestDriver_Up_ContextHintOverridesEnv(t *testing.T) {
+	// With the env var unset but a ctx hint present, Up should NOT return the
+	// KITTY_LISTEN_ON error — the socket check reads from ctx first.
+	fr := &fakeRunner{}
+	d := newWith(fr)
+	t.Setenv("KITTY_LISTEN_ON", "")
+	ctx := drivers.WithSocketHint(context.Background(), "unix:/tmp/ctx.sock")
+	p := &spec.Project{Name: "x", Driver: "kitty", Cwd: "/tmp",
+		Tabs: []spec.Tab{{Title: "shell"}}}
+	if err := d.Up(ctx, p); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestDriver_Down_ClosesProjectTabs(t *testing.T) {
 	fr := &fakeRunner{}
 	d := newWith(fr)

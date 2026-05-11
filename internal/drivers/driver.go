@@ -8,6 +8,22 @@ import (
 	"github.com/ijcd/sesh/internal/spec"
 )
 
+type ctxKey int
+
+const socketHintKey ctxKey = iota
+
+// WithSocketHint attaches a kitty socket path to ctx so that the kitty driver
+// can read it without mutating os.Setenv. Ignored by non-kitty drivers.
+func WithSocketHint(ctx context.Context, socket string) context.Context {
+	return context.WithValue(ctx, socketHintKey, socket)
+}
+
+// SocketHintFromContext returns the socket hint set by WithSocketHint, if any.
+func SocketHintFromContext(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(socketHintKey).(string)
+	return v, ok && v != ""
+}
+
 // Status reports whether a driver currently has a session/workspace
 // for the given project name.
 type Status string

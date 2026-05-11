@@ -12,6 +12,16 @@ import (
 	"github.com/ijcd/sesh/internal/spec"
 )
 
+// detectSocket returns the kitty socket to use. It prefers a context hint
+// (set by drivers.WithSocketHint) over the KITTY_LISTEN_ON environment variable
+// so callers can pass a specific socket without mutating os.Setenv.
+func detectSocketFromContext(ctx context.Context) string {
+	if hint, ok := drivers.SocketHintFromContext(ctx); ok {
+		return hint
+	}
+	return detectSocket()
+}
+
 type Driver struct {
 	r Runner // non-nil only when injected by newWith (tests)
 }
@@ -42,9 +52,9 @@ func newWith(r Runner) *Driver { return &Driver{r: r} }
 func (d *Driver) Name() string { return "kitty" }
 
 // runner returns the Runner to use. If a runner was injected (tests), return
-// it directly. Otherwise build a fresh exec runner using the current
-// KITTY_LISTEN_ON socket so that --launch env changes are always picked up.
-func (d *Driver) runner() (Runner, error) {
+// it directly. Otherwise build a fresh exec runner. The socket is resolved
+// from ctx (via drivers.WithSocketHint) first, falling back to KITTY_LISTEN_ON.
+func (d *Driver) runner(ctx context.Context) (Runner, error) {
 	if d.r != nil {
 		return d.r, nil
 	}
@@ -52,7 +62,7 @@ func (d *Driver) runner() (Runner, error) {
 	if err != nil {
 		return nil, err
 	}
-	socket := detectSocket()
+	socket := detectSocketFromContext(ctx)
 	inner := newKittenRunner(bin, socket)
 	return newSocketRequiredRunner(inner, socket), nil
 }
@@ -62,14 +72,14 @@ func detectSocket() string {
 }
 
 func (d *Driver) Up(ctx context.Context, p *spec.Project) error {
-	if detectSocket() == "" {
+	if detectSocketFromContext(ctx) == "" {
 		return fmt.Errorf("kitty driver: KITTY_LISTEN_ON unset (run inside kitty or use --launch)")
 	}
 	cmds, err := BuildCommands(p)
 	if err != nil {
 		return err
 	}
-	r, err := d.runner()
+	r, err := d.runner(ctx)
 	if err != nil {
 		return err
 	}
@@ -93,7 +103,7 @@ func (d *Driver) DryRun(p *spec.Project) ([]string, error) {
 var _ drivers.Driver = (*Driver)(nil)
 
 func (d *Driver) Down(ctx context.Context, name string) error {
-	r, err := d.runner()
+	r, err := d.runner(ctx)
 	if err != nil {
 		return err
 	}
@@ -101,7 +111,7 @@ func (d *Driver) Down(ctx context.Context, name string) error {
 }
 
 func (d *Driver) Status(ctx context.Context, name string) (drivers.Status, error) {
-	r, err := d.runner()
+	r, err := d.runner(ctx)
 	if err != nil {
 		return drivers.StatusUnknown, err
 	}

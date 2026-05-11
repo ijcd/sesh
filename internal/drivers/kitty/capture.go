@@ -13,7 +13,7 @@ import (
 // Capture parses `kitten ls` and produces a draft *spec.Project for the
 // focused OS window. Returns (nil, nil) if no OS windows are present.
 func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
-	r, err := d.runner()
+	r, err := d.runner(ctx)
 	if err != nil {
 		return nil, err
 	}
