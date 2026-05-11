@@ -47,7 +47,7 @@ func (d *Driver) Status(ctx context.Context, name string) (drivers.Status, error
 func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
 	return d.CaptureVal, d.CaptureErr
 }
-func (d *Driver) DryRun(p *spec.Project) ([]string, error)           { return d.DryRunVal, nil }
+func (d *Driver) DryRun(p *spec.Project) ([]string, error) { return d.DryRunVal, nil }
 
 // AttachCommandVal is what AttachCommand returns. AttachCommandErr is the error.
 // Set these in tests as needed; defaults are empty (returns "" and nil).
