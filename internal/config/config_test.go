@@ -53,7 +53,8 @@ func TestLoad_AppliesGlobalDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(cfgDir, "config.yml"), []byte(`driver: kitty
-editor: nvim
+vars:
+  FOO: bar
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}

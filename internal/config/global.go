@@ -13,28 +13,16 @@ import (
 // scalar/map fields are unset. Lists are NOT allowed at this level —
 // shared lists belong in templates.
 type Global struct {
-	Driver   string            `yaml:"driver,omitempty"`
-	Attach   *bool             `yaml:"attach,omitempty"`
-	Editor   string            `yaml:"editor,omitempty"`
-	StateDir string            `yaml:"state_dir,omitempty"`
-	Launch   GlobalLaunch      `yaml:"launch,omitempty"`
-	Vars     map[string]string `yaml:"vars,omitempty"`
-}
-
-// GlobalLaunch holds launch-specific global defaults.
-type GlobalLaunch struct {
-	SocketDir   string `yaml:"socket_dir,omitempty"`
-	WaitTimeout string `yaml:"wait_timeout,omitempty"` // duration string e.g. "5s"
+	Driver string            `yaml:"driver,omitempty"`
+	Attach *bool             `yaml:"attach,omitempty"`
+	Vars   map[string]string `yaml:"vars,omitempty"`
 }
 
 // allowedGlobalKeys defines which top-level keys are permitted in config.yml.
 var allowedGlobalKeys = map[string]bool{
-	"driver":    true,
-	"attach":    true,
-	"editor":    true,
-	"state_dir": true,
-	"launch":    true,
-	"vars":      true,
+	"driver": true,
+	"attach": true,
+	"vars":   true,
 }
 
 // listTypedKeys are project-level keys that are list-typed and therefore
@@ -64,7 +52,7 @@ func LoadGlobal(path string) (*Global, error) {
 	}
 	for k := range raw {
 		if !allowedGlobalKeys[k] {
-			return nil, fmt.Errorf("%s: unknown key %q (allowed: driver, attach, editor, state_dir, launch, vars)", path, k)
+			return nil, fmt.Errorf("%s: unknown key %q (allowed: driver, attach, vars)", path, k)
 		}
 	}
 
@@ -77,9 +65,12 @@ func LoadGlobal(path string) (*Global, error) {
 
 // GlobalDefaultPath returns $XDG_CONFIG_HOME/sesh/config.yml, or ~/.config/sesh/config.yml.
 func GlobalDefaultPath() (string, error) {
-	base, err := configDir()
-	if err != nil {
-		return "", err
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "sesh", "config.yml"), nil
 	}
-	return filepath.Join(base, "config.yml"), nil
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home dir: %w", err)
+	}
+	return filepath.Join(home, ".config", "sesh", "config.yml"), nil
 }

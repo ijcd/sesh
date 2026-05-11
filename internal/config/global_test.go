@@ -25,7 +25,8 @@ func TestLoadGlobal_OK(t *testing.T) {
 	p := filepath.Join(dir, "config.yml")
 	if err := os.WriteFile(p, []byte(`driver: kitty
 attach: false
-editor: nvim
+vars:
+  FOO: bar
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -39,8 +40,8 @@ editor: nvim
 	if g.Attach == nil || *g.Attach != false {
 		t.Errorf("Attach = %v, want false", g.Attach)
 	}
-	if g.Editor != "nvim" {
-		t.Errorf("Editor = %q", g.Editor)
+	if g.Vars == nil || g.Vars["FOO"] != "bar" {
+		t.Errorf("Vars[FOO] = %v, want bar", g.Vars["FOO"])
 	}
 }
 
@@ -74,6 +75,29 @@ func TestLoadGlobal_RejectsUnknownKey(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "mystery") {
 		t.Errorf("error should name unknown key: %v", err)
+	}
+}
+
+func TestLoadGlobal_RejectsRemovedFields(t *testing.T) {
+	testCases := []string{
+		`editor: nvim`,
+		`state_dir: ~/.local/state/sesh`,
+		`launch:
+  socket_dir: ~/.local/state/sesh/sockets`,
+	}
+	for _, content := range testCases {
+		dir := t.TempDir()
+		p := filepath.Join(dir, "config.yml")
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := LoadGlobal(p)
+		if err == nil {
+			t.Fatalf("expected error for removed field in: %s", content)
+		}
+		if !strings.Contains(err.Error(), "unknown key") {
+			t.Errorf("error should be unknown key error: %v", err)
+		}
 	}
 }
 
