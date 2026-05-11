@@ -23,7 +23,8 @@ func detectSocketFromContext(ctx context.Context) string {
 }
 
 type Driver struct {
-	r Runner // non-nil only when injected by newWith (tests)
+	r          Runner     // non-nil only when injected by newWith (tests)
+	pgidLookup pgidLookup // non-nil only when injected by tests; falls back to systemPgidLookup
 }
 
 type kittyOSWindow struct {
@@ -41,6 +42,7 @@ type kittyWindow struct {
 	ForegroundProcesses []kittyForegroundProc `json:"foreground_processes"`
 }
 type kittyForegroundProc struct {
+	Pid     int      `json:"pid"`
 	Cmdline []string `json:"cmdline"`
 }
 

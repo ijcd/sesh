@@ -28,18 +28,53 @@ func (d *Driver) Capture(ctx context.Context) ([]*spec.Project, error) {
 	if len(wins) == 0 {
 		return nil, nil
 	}
+
+	// Enrich foreground process info with pgid in ONE subprocess call.
+	// Picks the POSIX process-group leader as each tab's user-typed command,
+	// not whatever kitten happens to put at foreground_processes[0].
+	pids := collectForegroundPids(wins)
+	lookup := d.pgidLookup
+	if lookup == nil {
+		lookup = systemPgidLookup
+	}
+	pgids := lookup(ctx, pids)
+
 	projects := make([]*spec.Project, 0, len(wins))
 	for _, win := range wins {
-		p := captureOSWindow(win)
+		p := captureOSWindow(win, pgids)
 		projects = append(projects, p)
 	}
 	return projects, nil
 }
 
+// collectForegroundPids returns all pids across every foreground_process in
+// every tab in every OS window. Deduplicated for a tighter `ps` argv.
+func collectForegroundPids(wins []kittyOSWindow) []int {
+	seen := map[int]bool{}
+	var out []int
+	for _, win := range wins {
+		for _, t := range win.Tabs {
+			for _, w := range t.Windows {
+				for _, fp := range w.ForegroundProcesses {
+					if fp.Pid == 0 || seen[fp.Pid] {
+						continue
+					}
+					seen[fp.Pid] = true
+					out = append(out, fp.Pid)
+				}
+			}
+		}
+	}
+	return out
+}
+
 // captureOSWindow converts a single kitty OS window into a *spec.Project.
 // Project naming: if all tabs share a common "<prefix>:" sesh tag, the prefix
 // becomes the project name; otherwise falls back to "kitty-os-<id>".
-func captureOSWindow(win kittyOSWindow) *spec.Project {
+//
+// pgids maps pid → pgid for every foreground process in the OS window;
+// used to pick the user-typed command via POSIX group-leader semantics.
+func captureOSWindow(win kittyOSWindow, pgids map[int]int) *spec.Project {
 	p := &spec.Project{Driver: "kitty"}
 	p.Name = osWindowName(win)
 	cwds := []string{}
@@ -51,12 +86,9 @@ func captureOSWindow(win kittyOSWindow) *spec.Project {
 			if w.Cwd != "" {
 				cwds = append(cwds, w.Cwd)
 			}
-			if len(w.ForegroundProcesses) > 0 {
-				if c := normalizeCmdline(w.ForegroundProcesses[0].Cmdline); c != "" {
-					cmds = append(cmds, c)
-				} else {
-					cmds = append(cmds, "")
-				}
+			cmdline := pickForegroundCmd(w.ForegroundProcesses, pgids)
+			if c := normalizeCmdline(cmdline); c != "" {
+				cmds = append(cmds, c)
 			} else {
 				cmds = append(cmds, "")
 			}

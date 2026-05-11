@@ -52,15 +52,16 @@ func TestCapture_MultiTabMultiPane(t *testing.T) {
 	fr := &fakeRunner{captureOut: `[
       {"is_focused": true, "tabs": [
         {"title": "demo:claude", "windows": [
-          {"cwd": "/tmp", "foreground_processes": [{"cmdline": ["claude", "--continue"]}]}
+          {"cwd": "/tmp", "foreground_processes": [{"pid": 100, "cmdline": ["claude", "--continue"]}]}
         ]},
         {"title": "demo:dev", "windows": [
-          {"cwd": "/tmp/x", "foreground_processes": [{"cmdline": ["overmind", "start"]}]},
-          {"cwd": "/tmp/x", "foreground_processes": [{"cmdline": ["iex", "-S", "mix"]}]}
+          {"cwd": "/tmp/x", "foreground_processes": [{"pid": 200, "cmdline": ["overmind", "start"]}]},
+          {"cwd": "/tmp/x", "foreground_processes": [{"pid": 300, "cmdline": ["iex", "-S", "mix"]}]}
         ]}
       ]}
     ]`}
 	d := newWith(fr)
+	d.pgidLookup = alwaysLeader
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
 	projects, _ := d.Capture(context.Background())
 	if len(projects) != 1 {
@@ -88,11 +89,12 @@ func TestCapture_OvermindNormalization(t *testing.T) {
       {"is_focused": true, "tabs": [
         {"title": "demo:dev", "windows": [
           {"cwd": "/x",
-           "foreground_processes": [{"cmdline": ["tmux", "-L", "overmind-abc", "attach"]}]}
+           "foreground_processes": [{"pid": 400, "cmdline": ["tmux", "-L", "overmind-abc", "attach"]}]}
         ]}
       ]}
     ]`}
 	d := newWith(fr)
+	d.pgidLookup = alwaysLeader
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
 	projects, _ := d.Capture(context.Background())
 	if len(projects) != 1 || projects[0].Tabs[0].Cmd != "overmind start" {
