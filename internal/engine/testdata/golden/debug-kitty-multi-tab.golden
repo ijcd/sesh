@@ -1,0 +1,9 @@
+cwd: /tmp
+driver: kitty
+tabs:
+- title: claude
+  cmd: claude --continue
+- title: shell
+
+--- commands ---
+<mocked dry-run command for kitty-multi-tab>

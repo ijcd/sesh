@@ -1,0 +1,7 @@
+cwd: /tmp
+driver: tmux
+tabs:
+- title: shell
+
+--- commands ---
+<mocked dry-run command for tmux-simple>
