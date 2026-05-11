@@ -19,17 +19,26 @@ type Runner interface {
 	RunCapture(ctx context.Context, args ...string) (string, error)
 }
 
-type execRunner struct{}
+type execRunner struct {
+	socketArg string // e.g., "sesh-test" → prefixes "-L sesh-test" to every tmux invocation
+}
 
-func (execRunner) Run(ctx context.Context, args ...string) error {
-	cmd := exec.CommandContext(ctx, "tmux", args...)
+func (r *execRunner) tmuxArgs(args []string) []string {
+	if r.socketArg == "" {
+		return args
+	}
+	return append([]string{"-L", r.socketArg}, args...)
+}
+
+func (r *execRunner) Run(ctx context.Context, args ...string) error {
+	cmd := exec.CommandContext(ctx, "tmux", r.tmuxArgs(args)...)
 	cmd.Stdout = nil // discard; tmux Run commands are silent on success
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
-func (execRunner) RunCapture(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "tmux", args...)
+func (r *execRunner) RunCapture(ctx context.Context, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "tmux", r.tmuxArgs(args)...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = os.Stderr
@@ -43,10 +52,20 @@ type Driver struct {
 }
 
 // New returns a production Driver that shells out to tmux.
-func New() *Driver { return &Driver{r: execRunner{}} }
+func New() *Driver { return &Driver{r: &execRunner{}} }
 
 // newWith returns a Driver using the provided Runner (for testing).
 func newWith(r Runner) *Driver { return &Driver{r: r} }
+
+// WithSocket configures the driver to invoke `tmux -L <socket>` for all
+// subsequent calls. Used by integration tests to isolate from the user's
+// tmux server. Returns the same driver for chaining.
+func (d *Driver) WithSocket(socket string) *Driver {
+	if er, ok := d.r.(*execRunner); ok {
+		er.socketArg = socket
+	}
+	return d
+}
 
 func (d *Driver) Name() string { return "tmux" }
 
