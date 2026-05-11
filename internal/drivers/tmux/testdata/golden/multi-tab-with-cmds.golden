@@ -1,0 +1,4 @@
+tmux new-session -d -s 'demo' -n 'claude' -c '/tmp'
+tmux send-keys -t 'demo:claude' 'claude --continue' Enter
+tmux new-window -t 'demo' -n 'dev' -c '/tmp'
+tmux send-keys -t 'demo:dev' 'echo dev' Enter

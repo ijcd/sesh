@@ -1,0 +1,7 @@
+tmux new-session -d -s 'demo' -n 'dev' -c '/tmp'
+tmux send-keys -t 'demo:dev' 'overmind start' Enter
+tmux select-pane -t 'demo:dev'.0 -T 'server'
+tmux split-window -t 'demo:dev' -c '/tmp'
+tmux send-keys -t 'demo:dev.1' 'psql' Enter
+tmux select-pane -t 'demo:dev.1' -T 'db'
+tmux select-layout -t 'demo:dev' 'main-vertical'
