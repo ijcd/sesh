@@ -2,86 +2,67 @@
 package kitty
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
+
+	dexec "github.com/ijcd/sesh/internal/drivers/exec"
 )
 
-// Runner is the seam for shelling out to kitten. Production uses execRunner
+// Runner is the seam for shelling out to kitten. Production uses dexec.ExecRunner
 // (forks `kitten @ --to <socket> ...`); tests substitute a fake.
-type Runner interface {
-	Run(ctx context.Context, args ...string) error
-	RunCapture(ctx context.Context, args ...string) (string, error)
-}
+type Runner = dexec.Runner
 
-type execRunner struct {
-	kittenPath string
-	socket     string // "" until KITTY_LISTEN_ON is read at Up time
-}
-
-func NewExecRunner() (*execRunner, error) {
-	p, err := kittenPath()
-	if err != nil {
-		return nil, err
+// newKittenRunner builds a Runner for kitten. When socket is non-empty the
+// prefix is ["@", "--to", socket]; when empty the prefix is ["@"] and Run
+// will return an error (the empty-socket guard is in kittenRun/kittenRunCapture
+// wrappers used by the driver, not in the runner itself).
+func newKittenRunner(kittenBin, socket string) Runner {
+	prefix := []string{"@"}
+	if socket != "" {
+		prefix = append(prefix, "--to", socket)
 	}
-	return &execRunner{kittenPath: p}, nil
+	return dexec.NewExecRunner(kittenBin, prefix)
 }
 
-// SetSocket assigns the kitten remote-control socket. Called by Driver
-// methods just before issuing commands so KITTY_LISTEN_ON changes
-// (e.g., from --launch) are picked up lazily.
-func (r *execRunner) SetSocket(s string) { r.socket = s }
-
-func (r *execRunner) fullArgs(args []string) []string {
-	out := []string{"@"}
-	if r.socket != "" {
-		out = append(out, "--to", r.socket)
-	}
-	return append(out, args...)
+// socketRequiredRunner wraps a Runner and rejects calls when socket is empty.
+// This preserves the old behaviour: running without KITTY_LISTEN_ON returns a
+// clear error rather than silently spawning a kitten process that will fail.
+type socketRequiredRunner struct {
+	inner  Runner
+	socket string
 }
 
-func (r *execRunner) Run(ctx context.Context, args ...string) error {
+func (r *socketRequiredRunner) Run(ctx context.Context, args ...string) error {
 	if r.socket == "" {
 		return errors.New("kitty driver: KITTY_LISTEN_ON unset (run inside kitty or use --launch)")
 	}
-	cmd := exec.CommandContext(ctx, r.kittenPath, r.fullArgs(args)...)
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return r.inner.Run(ctx, args...)
 }
 
-func (r *execRunner) RunCapture(ctx context.Context, args ...string) (string, error) {
+func (r *socketRequiredRunner) RunCapture(ctx context.Context, args ...string) (string, error) {
 	if r.socket == "" {
 		return "", errors.New("kitty driver: KITTY_LISTEN_ON unset (run inside kitty or use --launch)")
 	}
-	cmd := exec.CommandContext(ctx, r.kittenPath, r.fullArgs(args)...)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	return out.String(), err
+	return r.inner.RunCapture(ctx, args...)
 }
 
-// kittenPath finds the kitten binary. Order: PATH, kitty +kitten,
-// macOS app-bundle paths.
+// newSocketRequiredRunner wraps inner with an empty-socket guard.
+func newSocketRequiredRunner(inner Runner, socket string) Runner {
+	return &socketRequiredRunner{inner: inner, socket: socket}
+}
+
+// kittenPath finds the kitten binary. Order: PATH, macOS app-bundle paths.
+// Set SESH_NO_FALLBACK=1 in tests to disable the fallback probes.
 func kittenPath() (string, error) {
-	if p, err := exec.LookPath("kitten"); err == nil {
-		return p, nil
+	p, err := dexec.FindBin(
+		"kitten",
+		"/Applications/kitty.app/Contents/MacOS/kitten",
+		"/opt/homebrew/bin/kitten",
+		"/usr/local/bin/kitten",
+	)
+	if err != nil {
+		return "", fmt.Errorf("kitten not found in PATH or known locations")
 	}
-	// Only check fallback paths if not in test mode (allows tests to
-	// isolate the error path without needing to uninstall kitten).
-	if os.Getenv("KITTEN_NO_FALLBACK") == "" {
-		for _, p := range []string{
-			"/Applications/kitty.app/Contents/MacOS/kitten",
-			"/opt/homebrew/bin/kitten",
-			"/usr/local/bin/kitten",
-		} {
-			if _, err := os.Stat(p); err == nil {
-				return p, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("kitten not found in PATH or known locations")
+	return p, nil
 }

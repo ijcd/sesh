@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	dexec "github.com/ijcd/sesh/internal/drivers/exec"
 )
 
 // ErrTimeout is returned by WaitForSocket when the deadline expires before the
@@ -32,22 +34,13 @@ func SocketPathFor(project, stateDir string) (string, error) {
 // of the spawned process. The caller is responsible for waiting on the socket
 // via WaitForSocket and persisting the PID/socket in state for later teardown.
 func SpawnKitty(socket string) (int, error) {
-	kitty, err := exec.LookPath("kitty")
+	kitty, err := dexec.FindBin(
+		"kitty",
+		"/Applications/kitty.app/Contents/MacOS/kitty",
+		"/opt/homebrew/bin/kitty",
+	)
 	if err != nil {
-		// macOS app-bundle fallbacks when kitty is not on PATH.
-		for _, p := range []string{
-			"/Applications/kitty.app/Contents/MacOS/kitty",
-			"/opt/homebrew/bin/kitty",
-		} {
-			if _, e := os.Stat(p); e == nil {
-				kitty = p
-				err = nil
-				break
-			}
-		}
-		if err != nil {
-			return 0, fmt.Errorf("kitty not found in PATH: %w", err)
-		}
+		return 0, fmt.Errorf("kitty not found in PATH: %w", err)
 	}
 
 	base := filepath.Base(socket)

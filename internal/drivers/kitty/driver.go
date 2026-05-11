@@ -13,7 +13,7 @@ import (
 )
 
 type Driver struct {
-	r Runner
+	r Runner // non-nil only when injected by newWith (tests)
 }
 
 type kittyOSWindow struct {
@@ -41,23 +41,20 @@ func newWith(r Runner) *Driver { return &Driver{r: r} }
 
 func (d *Driver) Name() string { return "kitty" }
 
-// runner returns the Runner to use, lazily building an execRunner with
-// the current KITTY_LISTEN_ON socket if no runner was injected.
+// runner returns the Runner to use. If a runner was injected (tests), return
+// it directly. Otherwise build a fresh exec runner using the current
+// KITTY_LISTEN_ON socket so that --launch env changes are always picked up.
 func (d *Driver) runner() (Runner, error) {
 	if d.r != nil {
-		// For test runners, also let them know the env-detected socket if
-		// they care; tests typically don't need this and pre-set things.
-		if er, ok := d.r.(*execRunner); ok {
-			er.SetSocket(detectSocket())
-		}
 		return d.r, nil
 	}
-	er, err := NewExecRunner()
+	bin, err := kittenPath()
 	if err != nil {
 		return nil, err
 	}
-	er.SetSocket(detectSocket())
-	return er, nil
+	socket := detectSocket()
+	inner := newKittenRunner(bin, socket)
+	return newSocketRequiredRunner(inner, socket), nil
 }
 
 func detectSocket() string {

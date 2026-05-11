@@ -1,69 +1,46 @@
 package tmux
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/ijcd/sesh/internal/drivers"
+	dexec "github.com/ijcd/sesh/internal/drivers/exec"
 	"github.com/ijcd/sesh/internal/spec"
 )
 
-// Runner is the seam for shelling out to tmux. Production uses execRunner
+// Runner is the seam for shelling out to tmux. Production uses dexec.ExecRunner
 // (which fork/exec's `tmux ...`); tests substitute a fake.
-type Runner interface {
-	Run(ctx context.Context, args ...string) error
-	RunCapture(ctx context.Context, args ...string) (string, error)
-}
-
-type execRunner struct {
-	socketArg string // e.g., "sesh-test" → prefixes "-L sesh-test" to every tmux invocation
-}
-
-func (r *execRunner) tmuxArgs(args []string) []string {
-	if r.socketArg == "" {
-		return args
-	}
-	return append([]string{"-L", r.socketArg}, args...)
-}
-
-func (r *execRunner) Run(ctx context.Context, args ...string) error {
-	cmd := exec.CommandContext(ctx, "tmux", r.tmuxArgs(args)...)
-	cmd.Stdout = nil // discard; tmux Run commands are silent on success
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func (r *execRunner) RunCapture(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "tmux", r.tmuxArgs(args)...)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	return out.String(), err
-}
+type Runner = dexec.Runner
 
 // Driver implements drivers.Driver for tmux.
 type Driver struct {
-	r Runner
+	r      Runner
+	socket string // non-empty when WithSocket has been called
 }
 
 // New returns a production Driver that shells out to tmux.
-func New() *Driver { return &Driver{r: &execRunner{}} }
+func New() *Driver { return &Driver{r: tmuxRunner("")} }
 
 // newWith returns a Driver using the provided Runner (for testing).
 func newWith(r Runner) *Driver { return &Driver{r: r} }
+
+// tmuxRunner builds an ExecRunner for tmux with optional -L socket prefix.
+func tmuxRunner(socket string) Runner {
+	prefix := []string{}
+	if socket != "" {
+		prefix = []string{"-L", socket}
+	}
+	return dexec.NewExecRunner("tmux", prefix)
+}
 
 // WithSocket configures the driver to invoke `tmux -L <socket>` for all
 // subsequent calls. Used by integration tests to isolate from the user's
 // tmux server. Returns the same driver for chaining.
 func (d *Driver) WithSocket(socket string) *Driver {
-	if er, ok := d.r.(*execRunner); ok {
-		er.socketArg = socket
-	}
+	d.socket = socket
+	d.r = tmuxRunner(socket)
 	return d
 }
 
