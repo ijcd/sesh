@@ -9,12 +9,12 @@ func TestCapture_NoOSWindows(t *testing.T) {
 	fr := &fakeRunner{captureOut: `[]`}
 	d := newWith(fr)
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
-	p, err := d.Capture(context.Background())
+	projects, err := d.Capture(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p != nil {
-		t.Errorf("expected nil project, got %+v", p)
+	if len(projects) != 0 {
+		t.Errorf("expected empty slice, got %d projects", len(projects))
 	}
 }
 
@@ -29,13 +29,14 @@ func TestCapture_SingleTabSinglePane(t *testing.T) {
     ]`}
 	d := newWith(fr)
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
-	p, err := d.Capture(context.Background())
+	projects, err := d.Capture(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p == nil {
-		t.Fatal("expected non-nil project")
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
 	}
+	p := projects[0]
 	if p.Driver != "kitty" || p.Cwd != "/tmp" {
 		t.Errorf("got %+v", p)
 	}
@@ -61,8 +62,12 @@ func TestCapture_MultiTabMultiPane(t *testing.T) {
     ]`}
 	d := newWith(fr)
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
-	p, _ := d.Capture(context.Background())
-	if p == nil || len(p.Tabs) != 2 {
+	projects, _ := d.Capture(context.Background())
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
+	}
+	p := projects[0]
+	if len(p.Tabs) != 2 {
 		t.Fatalf("expected 2 tabs, got %+v", p)
 	}
 	// Tab 0: single pane, Cmd populated
@@ -89,9 +94,9 @@ func TestCapture_OvermindNormalization(t *testing.T) {
     ]`}
 	d := newWith(fr)
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
-	p, _ := d.Capture(context.Background())
-	if p.Tabs[0].Cmd != "overmind start" {
-		t.Errorf("expected overmind normalization, got %q", p.Tabs[0].Cmd)
+	projects, _ := d.Capture(context.Background())
+	if len(projects) != 1 || projects[0].Tabs[0].Cmd != "overmind start" {
+		t.Errorf("expected overmind normalization, got %+v", projects)
 	}
 }
 
@@ -104,8 +109,8 @@ func TestCapture_PrefersFocusedOSWindow(t *testing.T) {
     ]`}
 	d := newWith(fr)
 	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
-	p, _ := d.Capture(context.Background())
-	if p == nil || p.Tabs[0].Title != "shell" {
-		t.Errorf("expected focused-window's tab, got %+v", p)
+	projects, _ := d.Capture(context.Background())
+	if len(projects) != 1 || projects[0].Tabs[0].Title != "shell" {
+		t.Errorf("expected focused-window's tab, got %+v", projects)
 	}
 }

@@ -17,7 +17,7 @@ type Driver struct {
 	UpErr            error
 	DownErr          error
 	DryRunVal        []string
-	CaptureVal       *spec.Project
+	CaptureProjects  []*spec.Project
 	CaptureErr       error
 	AttachCommandVal string
 	AttachCommandErr error
@@ -44,8 +44,8 @@ func (d *Driver) Status(ctx context.Context, name string) (drivers.Status, error
 	return d.StatusVal, d.StatusErr
 }
 
-func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
-	return d.CaptureVal, d.CaptureErr
+func (d *Driver) Capture(ctx context.Context) ([]*spec.Project, error) {
+	return d.CaptureProjects, d.CaptureErr
 }
 func (d *Driver) DryRun(p *spec.Project) ([]string, error) { return d.DryRunVal, nil }
 

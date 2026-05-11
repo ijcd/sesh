@@ -11,8 +11,9 @@ import (
 )
 
 // Capture parses `kitten ls` and produces a draft *spec.Project for the
-// focused OS window. Returns (nil, nil) if no OS windows are present.
-func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
+// focused OS window. Returns an empty slice (nil error) if no OS windows are
+// present. C2 will extend this to enumerate all OS windows.
+func (d *Driver) Capture(ctx context.Context) ([]*spec.Project, error) {
 	r, err := d.runner(ctx)
 	if err != nil {
 		return nil, err
@@ -72,7 +73,7 @@ func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
 		p.Tabs = append(p.Tabs, tab)
 	}
 	p.Cwd = mostCommonCwd(cwds)
-	return p, nil
+	return []*spec.Project{p}, nil
 }
 
 func pickFocused(wins []kittyOSWindow) kittyOSWindow {

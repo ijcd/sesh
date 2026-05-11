@@ -22,14 +22,14 @@ func TestIntegration_LsFromRunningKitty(t *testing.T) {
 	}
 	t.Setenv("KITTY_LISTEN_ON", sock)
 	d := New()
-	p, err := d.Capture(context.Background())
+	projects, err := d.Capture(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p == nil {
+	if len(projects) == 0 {
 		t.Skip("no OS windows in test kitty instance")
 	}
-	if p.Driver != "kitty" {
-		t.Errorf("driver = %q, want kitty", p.Driver)
+	if projects[0].Driver != "kitty" {
+		t.Errorf("driver = %q, want kitty", projects[0].Driver)
 	}
 }

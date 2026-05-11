@@ -29,9 +29,8 @@ func TestNewCaptureCmd_NoSession(t *testing.T) {
 
 func TestNewCaptureCmd_OutputsYAML(t *testing.T) {
 	md := mock.New("tmux")
-	md.CaptureVal = &spec.Project{
-		Driver: "tmux",
-		Tabs:   []spec.Tab{{Title: "shell"}},
+	md.CaptureProjects = []*spec.Project{
+		{Driver: "tmux", Tabs: []spec.Tab{{Title: "shell"}}},
 	}
 
 	e := engine.New()

@@ -24,13 +24,14 @@ func newCaptureCmd(e *engine.Engine) *cobra.Command {
 				if d == nil {
 					continue
 				}
-				p, err := d.Capture(context.Background())
+				projects, err := d.Capture(context.Background())
 				if err != nil {
 					return err
 				}
-				if p == nil {
+				if len(projects) == 0 {
 					return fmt.Errorf("no current tmux session to capture")
 				}
+				p := projects[0]
 				p.Name = args[0]
 				out, err := yaml.Marshal(p)
 				if err != nil {

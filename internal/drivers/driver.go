@@ -41,9 +41,10 @@ type Driver interface {
 	Down(ctx context.Context, name string) error
 	Status(ctx context.Context, name string) (Status, error)
 
-	// Capture snapshots the live state into a draft *spec.Project. May return
-	// (nil, nil) for drivers that don't support capture.
-	Capture(ctx context.Context) (*spec.Project, error)
+	// Capture snapshots the live state into draft *spec.Projects, one per
+	// capturable unit (tmux session, kitty OS window). Returns an empty slice
+	// (not an error) when the driver is not running or has nothing to capture.
+	Capture(ctx context.Context) ([]*spec.Project, error)
 
 	// DryRun returns the exact shell commands Up would execute, as strings.
 	// Used by `sesh debug`.

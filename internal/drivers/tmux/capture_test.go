@@ -2,25 +2,27 @@ package tmux
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
 func TestCapture_NoSession(t *testing.T) {
-	fr := &fakeRunner{statusErr: nil, statusOut: ""}
+	// list-sessions returns error → no tmux server running → empty slice, no error.
+	fr := &fakeRunner{statusErr: errors.New("no server running"), statusOut: ""}
 	d := newWith(fr)
-	p, err := d.Capture(context.Background())
+	projects, err := d.Capture(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p != nil {
-		t.Errorf("expected nil project when no current session, got %+v", p)
+	if len(projects) != 0 {
+		t.Errorf("expected empty slice when no session, got %d projects", len(projects))
 	}
 }
 
 func TestCapture_ParsesWindowsAndPanes(t *testing.T) {
 	fr := &fakeListRunner{
-		currentSession: "demo",
-		listWindows:    "claude\ndev\ndb\n",
+		sessions:    "demo\n",
+		listWindows: "claude\ndev\ndb\n",
 		listPanesByWin: map[string]string{
 			"claude": "claude --continue\n",
 			"dev":    "overmind start\niex -S mix\n",
@@ -28,13 +30,14 @@ func TestCapture_ParsesWindowsAndPanes(t *testing.T) {
 		},
 	}
 	d := newWith(fr)
-	p, err := d.Capture(context.Background())
+	projects, err := d.Capture(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p == nil {
-		t.Fatal("expected non-nil project")
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
 	}
+	p := projects[0]
 	if p.Name != "demo" || p.Driver != "tmux" {
 		t.Errorf("project = %+v", p)
 	}
@@ -50,9 +53,29 @@ func TestCapture_ParsesWindowsAndPanes(t *testing.T) {
 	}
 }
 
+func TestCapture_MultipleSessionsReturnsMultipleProjects(t *testing.T) {
+	fr := &fakeListRunner{
+		sessions:       "alpha\nbeta\n",
+		listWindows:    "shell\n",
+		listPanesByWin: map[string]string{"shell": "zsh\n"},
+	}
+	d := newWith(fr)
+	projects, err := d.Capture(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 2 {
+		t.Fatalf("expected 2 projects for 2 sessions, got %d", len(projects))
+	}
+	names := map[string]bool{projects[0].Name: true, projects[1].Name: true}
+	if !names["alpha"] || !names["beta"] {
+		t.Errorf("unexpected project names: %v, %v", projects[0].Name, projects[1].Name)
+	}
+}
+
 // fakeListRunner returns canned outputs based on argv.
 type fakeListRunner struct {
-	currentSession string
+	sessions       string
 	listWindows    string
 	listPanesByWin map[string]string
 }
@@ -63,12 +86,12 @@ func (f *fakeListRunner) RunCapture(ctx context.Context, args ...string) (string
 		return "", nil
 	}
 	switch args[0] {
-	case "display-message":
-		return f.currentSession, nil
+	case "list-sessions":
+		return f.sessions, nil
 	case "list-windows":
 		return f.listWindows, nil
 	case "list-panes":
-		// -t <session>:<window> -F '#{pane_current_command_full}'
+		// -t <session>:<window> -F '#{pane_current_command}'
 		for i := 0; i < len(args)-1; i++ {
 			if args[i] == "-t" {
 				target := args[i+1]

@@ -8,15 +8,33 @@ import (
 	"github.com/ijcd/sesh/internal/spec"
 )
 
-// Capture snapshots the current attached tmux session into a draft *spec.Project.
-// Returns (nil, nil) if no current session (e.g., not running inside tmux).
-func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
-	sess, err := d.r.RunCapture(ctx, "display-message", "-p", "#S")
-	if err != nil || strings.TrimSpace(sess) == "" {
+// Capture enumerates all tmux sessions and returns a draft *spec.Project for
+// each one. Returns an empty slice (nil error) if tmux is not running or has
+// no sessions.
+func (d *Driver) Capture(ctx context.Context) ([]*spec.Project, error) {
+	out, err := d.r.RunCapture(ctx, "list-sessions", "-F", "#{session_name}")
+	if err != nil {
+		// tmux not running or no sessions — not an error for callers.
 		return nil, nil
 	}
-	sess = strings.TrimSpace(sess)
+	sessions := splitNonEmpty(out)
+	if len(sessions) == 0 {
+		return nil, nil
+	}
 
+	var projects []*spec.Project
+	for _, sess := range sessions {
+		p, err := d.captureSession(ctx, sess)
+		if err != nil {
+			return nil, err
+		}
+		projects = append(projects, p)
+	}
+	return projects, nil
+}
+
+// captureSession builds a *spec.Project for a single named tmux session.
+func (d *Driver) captureSession(ctx context.Context, sess string) (*spec.Project, error) {
 	out, err := d.r.RunCapture(ctx, "list-windows", "-t", sess, "-F", "#{window_name}")
 	if err != nil {
 		return nil, err
