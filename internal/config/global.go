@@ -77,12 +77,9 @@ func LoadGlobal(path string) (*Global, error) {
 
 // GlobalDefaultPath returns $XDG_CONFIG_HOME/sesh/config.yml, or ~/.config/sesh/config.yml.
 func GlobalDefaultPath() (string, error) {
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "sesh", "config.yml"), nil
-	}
-	home, err := os.UserHomeDir()
+	base, err := configDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
+		return "", err
 	}
-	return filepath.Join(home, ".config", "sesh", "config.yml"), nil
+	return filepath.Join(base, "config.yml"), nil
 }
