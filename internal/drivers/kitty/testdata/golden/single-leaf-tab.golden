@@ -1,0 +1,2 @@
+kitten launch --type=tab --tab-title='demo:shell' --cwd='/tmp'
+kitten focus-tab --match 'tab_title:^demo\:shell$'
