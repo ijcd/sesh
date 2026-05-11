@@ -42,7 +42,9 @@ sesh down hello     # tears it down
 | `sesh edit <name>` | Open project file in `$EDITOR`. |
 | `sesh delete <name> [-y]` | Remove project file (prompts unless `-y`). |
 | `sesh debug <name> [--commands-only]` | Print resolved spec + the exact tmux/kitten commands `up` would run. |
-| `sesh capture <name>` | Snapshot current tmux/kitty state to YAML on stdout (suggest-only; never writes). |
+| `sesh capture` (or `--list`) | List available captures across drivers (tmux sessions, kitty OS windows). |
+| `sesh capture <name>` | Snapshot the current focused unit to YAML (legacy single-capture). |
+| `sesh capture --all` | Multi-doc YAML for every captureable unit. |
 | `sesh validate <name>` | Parse + merge + driver-validate without spawning. |
 | `sesh local [--launch]` | Use `./.sesh.yml` from CWD (per-repo configs). |
 | `sesh completion <shell>` | Shell completion script (cobra-built). |
@@ -242,6 +244,23 @@ tabs:
 sesh local              # picks up ./.sesh.yml from CWD
 sesh local --launch     # ditto, spawn kitty if needed
 ```
+
+### 8. Dogfooding existing state
+
+Capture existing terminal sessions to bootstrap project configs. Enumerate all running tmux sessions and kitty OS windows, or capture a specific focused unit:
+
+```sh
+# See what's already running
+sesh capture
+
+# Capture everything into a file for bulk editing
+sesh capture --all > ~/.config/sesh/projects/snapshot.yml
+
+# Or capture just the current focused session/window
+sesh capture my-new-project > ~/.config/sesh/projects/my-new-project.yml
+```
+
+Print to stdout, review, edit, then save as a project config. Never writes to disk directly — all capture output is suggestion-only.
 
 ## Discovery hook (`sesh init`)
 

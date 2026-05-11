@@ -49,7 +49,13 @@ When extending driver support, **update `VALID_PAIRS` and the `validate()` funct
 
 ### Capture is suggest-only
 
-`sesh capture` reads kitty's `@ ls` output, normalizes captured cmdlines (e.g., `tmux -L overmind-XXX...` → `overmind start` via `normalize_cmdline()`), and prints a draft JSON entry to stdout. It never writes to the config — the user pastes. Preserve this contract when extending capture (e.g., to other plugins).
+`sesh capture` enumerates and normalizes existing terminal sessions across all drivers, returning results to stdout (never writes config). Modes:
+
+- `Driver.Capture(ctx) ([]*spec.Project, error)` returns a slice—one `Project` per session/OS-window.
+- **tmux** iterates ALL sessions via `tmux list-sessions`.
+- **kitty** iterates ALL OS windows via `kitten ls`; cmdlines normalized (e.g., `tmux -L overmind-XXX...` → `overmind start` via `normalize_cmdline()`).
+- **CLI layer** dispatches all drivers (no tmux hardcoding); `capture` flag controls output mode (no args = list, `<name>` = single, `--all` = multi-doc).
+- Contract: stdout only, user pastes/edits before saving. Preserve when extending capture to new drivers.
 
 ### Kitty driver specifics
 
