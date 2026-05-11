@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -21,7 +20,7 @@ func newDebugCmd(e *engine.Engine) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return e.Debug(context.Background(), p, commandsOnly, os.Stdout)
+			return e.Debug(context.Background(), p, commandsOnly, cmd.OutOrStdout())
 		},
 	}
 	cmd.Flags().BoolVar(&commandsOnly, "commands-only", false, "Print only the dry-run commands (no spec)")

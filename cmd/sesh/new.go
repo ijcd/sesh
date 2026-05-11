@@ -54,7 +54,7 @@ func newNewCmd() *cobra.Command {
 			if err := os.WriteFile(dest, body, 0o644); err != nil {
 				return err
 			}
-			fmt.Printf("created %s\n", dest)
+			fmt.Fprintf(cmd.OutOrStdout(), "created %s\n", dest)
 			return nil
 		},
 	}

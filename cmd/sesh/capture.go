@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
@@ -37,7 +36,7 @@ func newCaptureCmd(e *engine.Engine) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				_, err = os.Stdout.Write(out)
+				_, err = cmd.OutOrStdout().Write(out)
 				return err
 			}
 			return fmt.Errorf("no driver supports capture")

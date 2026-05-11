@@ -24,7 +24,7 @@ containing .sesh.yml. It never spawns anything.`,
 			if err != nil {
 				return err
 			}
-			fmt.Print(s)
+			fmt.Fprint(cmd.OutOrStdout(), s)
 			return nil
 		},
 	}

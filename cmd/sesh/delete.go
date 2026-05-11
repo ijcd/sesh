@@ -26,17 +26,17 @@ func newDeleteCmd() *cobra.Command {
 				return fmt.Errorf("not found: %s", path)
 			}
 			if !yes {
-				fmt.Printf("delete %s? [y/N] ", path)
-				line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+				fmt.Fprintf(cmd.OutOrStdout(), "delete %s? [y/N] ", path)
+				line, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
 				if strings.TrimSpace(strings.ToLower(line)) != "y" {
-					fmt.Println("aborted")
+					fmt.Fprintln(cmd.OutOrStdout(), "aborted")
 					return nil
 				}
 			}
 			if err := os.Remove(path); err != nil {
 				return err
 			}
-			fmt.Printf("deleted %s\n", path)
+			fmt.Fprintf(cmd.OutOrStdout(), "deleted %s\n", path)
 			return nil
 		},
 	}

@@ -17,6 +17,8 @@ type Driver struct {
 	UpErr            error
 	DownErr          error
 	DryRunVal        []string
+	CaptureVal       *spec.Project
+	CaptureErr       error
 	AttachCommandVal string
 	AttachCommandErr error
 	ValidateErrs     []error
@@ -42,7 +44,9 @@ func (d *Driver) Status(ctx context.Context, name string) (drivers.Status, error
 	return d.StatusVal, d.StatusErr
 }
 
-func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) { return nil, nil }
+func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
+	return d.CaptureVal, d.CaptureErr
+}
 func (d *Driver) DryRun(p *spec.Project) ([]string, error)           { return d.DryRunVal, nil }
 
 // AttachCommandVal is what AttachCommand returns. AttachCommandErr is the error.

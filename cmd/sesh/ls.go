@@ -24,7 +24,7 @@ func newLsCmd() *cobra.Command {
 			entries, err := os.ReadDir(dir)
 			if err != nil {
 				if os.IsNotExist(err) {
-					fmt.Println("(no projects yet — try `sesh new <name>`)")
+					fmt.Fprintln(cmd.OutOrStdout(), "(no projects yet — try `sesh new <name>`)")
 					return nil
 				}
 				return err
@@ -33,7 +33,7 @@ func newLsCmd() *cobra.Command {
 				if e.IsDir() || !strings.HasSuffix(e.Name(), ".yml") {
 					continue
 				}
-				fmt.Println(strings.TrimSuffix(e.Name(), ".yml"))
+				fmt.Fprintln(cmd.OutOrStdout(), strings.TrimSuffix(e.Name(), ".yml"))
 			}
 			return nil
 		},

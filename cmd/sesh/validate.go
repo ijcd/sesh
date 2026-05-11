@@ -23,7 +23,7 @@ func newValidateCmd(e *engine.Engine) *cobra.Command {
 			if err := e.Validate(context.Background(), p); err != nil {
 				return err
 			}
-			fmt.Printf("ok: %s (%d tab(s), driver=%s)\n", p.Name, len(p.Tabs), p.Driver)
+			fmt.Fprintf(cmd.OutOrStdout(), "ok: %s (%d tab(s), driver=%s)\n", p.Name, len(p.Tabs), p.Driver)
 			return nil
 		},
 	}
