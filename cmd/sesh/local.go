@@ -31,22 +31,8 @@ func newLocalCmd(e *engine.Engine) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := requiresKitty(p, launchFlag); err != nil {
-				return err
-			}
 			ctx := context.Background()
-			if needsLaunch(p, launchFlag) {
-				if err := performLaunch(ctx, p); err != nil {
-					return err
-				}
-			}
-			if err := e.Up(ctx, p, force); err != nil {
-				return err
-			}
-			if p.Attach == nil || *p.Attach {
-				return attachIfTmux(p)
-			}
-			return nil
+			return runProject(ctx, e, p, force, launchFlag)
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Down + Up if a session already exists")

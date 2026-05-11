@@ -2,6 +2,7 @@ package tmux
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/ijcd/sesh/internal/spec"
@@ -41,7 +42,7 @@ func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
 		default:
 			for i, c := range cmds {
 				tab.Panes = append(tab.Panes, spec.Pane{
-					Title: paneAutoTitle(i), Cmd: c,
+					Title: fmt.Sprintf("p%d", i+1), Cmd: c,
 				})
 			}
 			tab.Driver = "tmux"
@@ -49,22 +50,6 @@ func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
 		p.Tabs = append(p.Tabs, tab)
 	}
 	return p, nil
-}
-
-func paneAutoTitle(i int) string {
-	return "p" + itoa(i+1)
-}
-
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	var s []byte
-	for i > 0 {
-		s = append([]byte{byte('0' + i%10)}, s...)
-		i /= 10
-	}
-	return string(s)
 }
 
 func splitNonEmpty(s string) []string {

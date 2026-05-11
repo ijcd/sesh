@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"syscall"
 
 	"github.com/ijcd/sesh/internal/drivers/tmux"
+	"github.com/ijcd/sesh/internal/engine"
 	"github.com/ijcd/sesh/internal/spec"
 )
 
@@ -31,4 +33,25 @@ func attachToTmux(p *spec.Project) error {
 	}
 	args := attachArgs(p, os.Getenv("TMUX") != "")
 	return syscall.Exec(tmuxBin, args, os.Environ())
+}
+
+// runProject orchestrates launching a project: validate kitty requirements,
+// spawn kitty if needed, run the engine, and attach to tmux if applicable.
+// force and launchFlag control the --force and --launch CLI flags respectively.
+func runProject(ctx context.Context, e *engine.Engine, p *spec.Project, force, launchFlag bool) error {
+	if err := requiresKitty(p, launchFlag); err != nil {
+		return err
+	}
+	if needsLaunch(p, launchFlag) {
+		if err := performLaunch(ctx, p); err != nil {
+			return err
+		}
+	}
+	if err := e.Up(ctx, p, force); err != nil {
+		return err
+	}
+	if p.Driver == "tmux" && (p.Attach == nil || *p.Attach) {
+		return attachToTmux(p)
+	}
+	return nil
 }

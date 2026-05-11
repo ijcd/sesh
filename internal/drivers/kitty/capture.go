@@ -76,6 +76,7 @@ func (d *Driver) Capture(ctx context.Context) (*spec.Project, error) {
 }
 
 func pickFocused(wins []kittyOSWindow) kittyOSWindow {
+	// Caller must guarantee len(wins) > 0
 	for _, w := range wins {
 		if w.IsFocused {
 			return w
