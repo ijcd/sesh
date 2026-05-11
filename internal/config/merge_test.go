@@ -124,3 +124,28 @@ func TestMerge_PanesByTitle(t *testing.T) {
 		t.Errorf("panes = %v, want [p1 p3]", titles)
 	}
 }
+
+func TestMerge_PaneFieldOverrideByTitle(t *testing.T) {
+	parent := &spec.Project{Tabs: []spec.Tab{{Title: "dev", Panes: []spec.Pane{
+		{Title: "p1", Cmd: "old-cmd", Cwd: "/parent/cwd"},
+		{Title: "p2", Cmd: "keep"},
+	}}}}
+	child := &spec.Project{Tabs: []spec.Tab{{Title: "dev", Panes: []spec.Pane{
+		{Title: "p1", Cmd: "new-cmd"},
+	}}}}
+	out := Merge(parent, child)
+	if len(out.Tabs[0].Panes) != 2 {
+		t.Fatalf("expected 2 panes, got %d", len(out.Tabs[0].Panes))
+	}
+	p1 := out.Tabs[0].Panes[0]
+	if p1.Cmd != "new-cmd" {
+		t.Errorf("p1.Cmd = %q, want new-cmd (child override)", p1.Cmd)
+	}
+	if p1.Cwd != "/parent/cwd" {
+		t.Errorf("p1.Cwd = %q, want /parent/cwd (inherited from parent)", p1.Cwd)
+	}
+	p2 := out.Tabs[0].Panes[1]
+	if p2.Cmd != "keep" {
+		t.Errorf("p2 should be unchanged, got %+v", p2)
+	}
+}
