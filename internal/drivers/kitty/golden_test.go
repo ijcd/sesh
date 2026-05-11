@@ -47,7 +47,7 @@ func TestBuildCommands_Golden(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := strings.Join(cmds, "\n") + "\n"
+			got := strings.Join(RenderCommands(cmds), "\n") + "\n"
 			golden := filepath.Join("testdata", "golden", tc.name+".golden")
 			testutil.Equal(t, got, golden)
 		})

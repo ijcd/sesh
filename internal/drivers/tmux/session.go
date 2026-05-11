@@ -50,18 +50,19 @@ func queryIntOption(ctx context.Context, r Runner, name string, def int) int {
 	return n
 }
 
-// BuildCommands returns the exact tmux invocations the driver would run for p.
-// Each element is a complete command including the leading "tmux ".
-// Used by both DryRun (`sesh debug`) and Up (which executes them).
-func BuildCommands(p *spec.Project) ([]string, error) {
+// BuildCommands returns the argv lists for all tmux invocations for p.
+// Each inner slice is the arguments passed to the tmux binary (without the
+// "tmux" prefix itself). Used by Up (which executes them) and DryRun (which
+// renders them for display via RenderCommands).
+func BuildCommands(p *spec.Project) ([][]string, error) {
 	return BuildCommandsWithOpts(p, BuildOpts{})
 }
 
 // BuildCommandsWithOpts is like BuildCommands but respects index options.
-func BuildCommandsWithOpts(p *spec.Project, opts BuildOpts) ([]string, error) {
+func BuildCommandsWithOpts(p *spec.Project, opts BuildOpts) ([][]string, error) {
 	sess := sessionName(p)
 
-	var cmds []string
+	var cmds [][]string
 
 	if len(p.Tabs) == 0 {
 		return nil, fmt.Errorf("project %q has no tabs", p.Name)
@@ -69,26 +70,20 @@ func BuildCommandsWithOpts(p *spec.Project, opts BuildOpts) ([]string, error) {
 
 	first := p.Tabs[0]
 	firstCwd := resolveCwd(first.Cwd, p.Cwd)
-	cmds = append(cmds, fmt.Sprintf("tmux new-session -d -s %s -n %s -c %s",
-		shellQuote(sess), shellQuote(first.Title), shellQuote(firstCwd)))
+	cmds = append(cmds, []string{"new-session", "-d", "-s", sess, "-n", first.Title, "-c", firstCwd})
 	cmds = append(cmds, buildTabWithOpts(sess, first, firstCwd, true, opts)...)
 
 	for _, tab := range p.Tabs[1:] {
 		tcwd := resolveCwd(tab.Cwd, p.Cwd)
-		cmds = append(cmds, fmt.Sprintf("tmux new-window -t %s -n %s -c %s",
-			shellQuote(sess), shellQuote(tab.Title), shellQuote(tcwd)))
+		cmds = append(cmds, []string{"new-window", "-t", sess, "-n", tab.Title, "-c", tcwd})
 		cmds = append(cmds, buildTabWithOpts(sess, tab, tcwd, false, opts)...)
 	}
 
 	return cmds, nil
 }
 
-func buildTab(sess string, tab spec.Tab, defaultCwd string, isFirst bool) []string {
-	return buildTabWithOpts(sess, tab, defaultCwd, isFirst, BuildOpts{})
-}
-
-func buildTabWithOpts(sess string, tab spec.Tab, tabCwd string, isFirst bool, opts BuildOpts) []string {
-	var cmds []string
+func buildTabWithOpts(sess string, tab spec.Tab, tabCwd string, isFirst bool, opts BuildOpts) [][]string {
+	var cmds [][]string
 	target := fmt.Sprintf("%s:%s", sess, tab.Title)
 
 	switch {
@@ -96,36 +91,62 @@ func buildTabWithOpts(sess string, tab spec.Tab, tabCwd string, isFirst bool, op
 		// First pane is the window's existing pane; populate by send-keys.
 		first := tab.Panes[0]
 		if first.Cmd != "" {
-			cmds = append(cmds, fmt.Sprintf("tmux send-keys -t %s %s Enter",
-				shellQuote(target), shellQuote(first.Cmd)))
+			cmds = append(cmds, []string{"send-keys", "-t", target, first.Cmd, "Enter"})
 		}
 		if first.Title != "" {
-			cmds = append(cmds, fmt.Sprintf("tmux select-pane -t %s.%d -T %s",
-				shellQuote(target), opts.PaneBaseIndex, shellQuote(first.Title)))
+			cmds = append(cmds, []string{"select-pane", "-t",
+				fmt.Sprintf("%s.%d", target, opts.PaneBaseIndex), "-T", first.Title})
 		}
 		for i, pane := range tab.Panes[1:] {
 			pcwd := resolveCwd(pane.Cwd, tabCwd)
-			cmds = append(cmds, fmt.Sprintf("tmux split-window -t %s -c %s",
-				shellQuote(target), shellQuote(pcwd)))
+			cmds = append(cmds, []string{"split-window", "-t", target, "-c", pcwd})
 			paneTarget := fmt.Sprintf("%s.%d", target, opts.PaneBaseIndex+i+1)
 			if pane.Cmd != "" {
-				cmds = append(cmds, fmt.Sprintf("tmux send-keys -t %s %s Enter",
-					shellQuote(paneTarget), shellQuote(pane.Cmd)))
+				cmds = append(cmds, []string{"send-keys", "-t", paneTarget, pane.Cmd, "Enter"})
 			}
 			if pane.Title != "" {
-				cmds = append(cmds, fmt.Sprintf("tmux select-pane -t %s -T %s",
-					shellQuote(paneTarget), shellQuote(pane.Title)))
+				cmds = append(cmds, []string{"select-pane", "-t", paneTarget, "-T", pane.Title})
 			}
 		}
 		if tab.Layout != "" {
-			cmds = append(cmds, fmt.Sprintf("tmux select-layout -t %s %s",
-				shellQuote(target), shellQuote(tab.Layout)))
+			cmds = append(cmds, []string{"select-layout", "-t", target, tab.Layout})
 		}
 	case tab.Cmd != "":
-		cmds = append(cmds, fmt.Sprintf("tmux send-keys -t %s %s Enter",
-			shellQuote(target), shellQuote(tab.Cmd)))
+		cmds = append(cmds, []string{"send-keys", "-t", target, tab.Cmd, "Enter"})
 	}
 	return cmds
+}
+
+// RenderCommands converts argv lists to display strings for DryRun output.
+// Each string looks like `tmux new-session -d -s 'demo'` with shell quoting
+// applied to value tokens (those that don't start with '-' and aren't the
+// subcommand at position 0 or the bare word "Enter").
+func RenderCommands(cmds [][]string) []string {
+	out := make([]string, len(cmds))
+	for i, argv := range cmds {
+		if len(argv) == 0 {
+			out[i] = "tmux"
+			continue
+		}
+		parts := make([]string, len(argv))
+		parts[0] = argv[0] // subcommand: never quoted
+		for j, a := range argv[1:] {
+			parts[j+1] = renderToken(a)
+		}
+		out[i] = "tmux " + strings.Join(parts, " ")
+	}
+	return out
+}
+
+// renderToken shell-quotes a single argv token for human-readable display.
+// Flags (starting with '-') and the bare keyword "Enter" are returned as-is;
+// all other value tokens are single-quoted. This reproduces the format the
+// old string-interpolation in BuildCommands produced.
+func renderToken(s string) string {
+	if strings.HasPrefix(s, "-") || s == "Enter" {
+		return s
+	}
+	return shellQuote(s)
 }
 
 func sessionName(p *spec.Project) string {

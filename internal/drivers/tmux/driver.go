@@ -76,14 +76,9 @@ func (d *Driver) Up(ctx context.Context, p *spec.Project) error {
 	if err != nil {
 		return err
 	}
-	for _, line := range cmds {
-		// line begins with "tmux "; strip and split into args.
-		args, err := splitTmuxCommand(line)
-		if err != nil {
-			return err
-		}
-		if err := d.r.Run(ctx, args...); err != nil {
-			return fmt.Errorf("tmux %s: %w", strings.Join(args, " "), err)
+	for _, argv := range cmds {
+		if err := d.r.Run(ctx, argv...); err != nil {
+			return fmt.Errorf("tmux %s: %w", strings.Join(argv, " "), err)
 		}
 	}
 	return nil
@@ -102,7 +97,11 @@ func (d *Driver) Status(ctx context.Context, name string) (drivers.Status, error
 }
 
 func (d *Driver) DryRun(p *spec.Project) ([]string, error) {
-	return BuildCommands(p)
+	cmds, err := BuildCommands(p)
+	if err != nil {
+		return nil, err
+	}
+	return RenderCommands(cmds), nil
 }
 
 // Validate runs tmux-specific checks. Currently a no-op; layouts are
@@ -116,45 +115,4 @@ func (d *Driver) AttachCommand(p *spec.Project) (string, error) {
 		sess = Slug(p.Name)
 	}
 	return fmt.Sprintf("tmux attach -t %s", sess), nil
-}
-
-// splitTmuxCommand parses a `tmux ...` line back into argv. We use single-quoted
-// values throughout BuildCommands, so a simple state-machine works.
-func splitTmuxCommand(line string) ([]string, error) {
-	if !strings.HasPrefix(line, "tmux ") {
-		return nil, fmt.Errorf("not a tmux command: %q", line)
-	}
-	s := line[len("tmux "):]
-	var args []string
-	var buf strings.Builder
-	inQuote := false
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case c == '\'' && !inQuote:
-			inQuote = true
-		case c == '\'' && inQuote:
-			// handle '\'' escape
-			if i+3 < len(s) && s[i:i+4] == `'\''` {
-				buf.WriteByte('\'')
-				i += 3
-				continue
-			}
-			inQuote = false
-		case c == ' ' && !inQuote:
-			if buf.Len() > 0 {
-				args = append(args, buf.String())
-				buf.Reset()
-			}
-		default:
-			buf.WriteByte(c)
-		}
-	}
-	if buf.Len() > 0 {
-		args = append(args, buf.String())
-	}
-	if inQuote {
-		return nil, fmt.Errorf("unterminated quote in: %q", line)
-	}
-	return args, nil
 }

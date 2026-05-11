@@ -7,6 +7,47 @@ import (
 	"github.com/ijcd/sesh/internal/spec"
 )
 
+// renderAll renders all argv slices to display strings, joined with newlines.
+func renderAll(cmds [][]string) string { return strings.Join(RenderCommands(cmds), "\n") }
+
+// containsArg reports whether any element of argv equals s.
+func containsArg(argv []string, s string) bool {
+	for _, a := range argv {
+		if a == s {
+			return true
+		}
+	}
+	return false
+}
+
+// anyArgvContains reports whether any argv in cmds contains an element equal to s.
+func anyArgvContains(cmds [][]string, s string) bool {
+	for _, argv := range cmds {
+		if containsArg(argv, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// anyArgvHasSubcmd reports whether any argv starts with subCmd.
+func anyArgvHasSubcmd(cmds [][]string, subCmd string) bool {
+	for _, argv := range cmds {
+		if len(argv) > 0 && argv[0] == subCmd {
+			return true
+		}
+	}
+	return false
+}
+
+// firstArgv returns the first argv slice, or nil if cmds is empty.
+func firstArgv(cmds [][]string) []string {
+	if len(cmds) == 0 {
+		return nil
+	}
+	return cmds[0]
+}
+
 func TestBuildCommands_LeafTabNoCmd(t *testing.T) {
 	p := &spec.Project{
 		Name: "demo", Driver: "kitty", Cwd: "/tmp",
@@ -19,15 +60,18 @@ func TestBuildCommands_LeafTabNoCmd(t *testing.T) {
 	if len(cmds) < 1 {
 		t.Fatal("expected at least 1 cmd")
 	}
-	first := cmds[0]
-	if !strings.Contains(first, "launch --type=tab") {
-		t.Errorf("first cmd missing launch --type=tab: %s", first)
+	first := firstArgv(cmds)
+	if first[0] != "launch" {
+		t.Errorf("first cmd should be launch: %v", first)
 	}
-	if !strings.Contains(first, "--tab-title='demo:shell'") {
-		t.Errorf("first cmd missing tab title: %s", first)
+	if !containsArg(first, "--type=tab") {
+		t.Errorf("first cmd missing --type=tab: %v", first)
 	}
-	if !strings.Contains(first, "--cwd='/tmp'") {
-		t.Errorf("first cmd missing cwd: %s", first)
+	if !containsArg(first, "--tab-title=demo:shell") {
+		t.Errorf("first cmd missing --tab-title=demo:shell: %v", first)
+	}
+	if !containsArg(first, "--cwd=/tmp") {
+		t.Errorf("first cmd missing --cwd=/tmp: %v", first)
 	}
 }
 
@@ -40,25 +84,25 @@ func TestBuildCommands_LeafTabWithCmd_UsesHoldAndShellWrap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first := cmds[0]
-	if !strings.Contains(first, "--hold") {
-		t.Errorf("expected --hold, got: %s", first)
+	first := firstArgv(cmds)
+	if !containsArg(first, "--hold") {
+		t.Errorf("expected --hold, got: %v", first)
 	}
-	if !strings.Contains(first, "-- /bin/sh -c 'claude --continue'") {
-		t.Errorf("cmd should be sh -c wrapped: %s", first)
+	if !containsArg(first, "-c") || !containsArg(first, "claude --continue") {
+		t.Errorf("cmd should include -c and the command: %v", first)
 	}
 }
 
 func TestBuildCommands_CmdWithShellMetacharacters(t *testing.T) {
 	p := &spec.Project{
 		Name: "demo", Driver: "kitty", Cwd: "/tmp",
-		Tabs: []spec.Tab{{Title: "x", Cmd: "echo \"hello world\" && tail -f log"}},
+		Tabs: []spec.Tab{{Title: "x", Cmd: `echo "hello world" && tail -f log`}},
 	}
 	cmds, _ := BuildCommands(p)
-	// The cmd must arrive intact inside the sh -c quoting; double-quotes
-	// and && both must survive.
-	if !strings.Contains(cmds[0], `'echo "hello world" && tail -f log'`) {
-		t.Errorf("cmd not properly quoted: %s", cmds[0])
+	first := firstArgv(cmds)
+	// The cmd must arrive intact as a single argv element (no splitting).
+	if !containsArg(first, `echo "hello world" && tail -f log`) {
+		t.Errorf("cmd not intact as single argv element: %v", first)
 	}
 }
 
@@ -74,9 +118,12 @@ func TestBuildCommands_FocusFirstTabByDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	last := cmds[len(cmds)-1]
-	// MatchTabTitle escapes ':' to '\:' in the regex; verify both focus-tab and the title appear.
-	if !strings.Contains(last, "focus-tab") || !strings.Contains(last, `demo\:a`) {
-		t.Errorf("last cmd should focus first tab 'a': %s", last)
+	// focus-tab targeting demo:a (MatchTabTitle escapes colon to \: in regex)
+	if last[0] != "focus-tab" {
+		t.Errorf("last cmd should be focus-tab: %v", last)
+	}
+	if !containsArg(last, MatchTabTitle(ProjectTabTitle("demo", "a"))) {
+		t.Errorf("last cmd should target demo:a: %v", last)
 	}
 }
 
@@ -90,9 +137,8 @@ func TestBuildCommands_StartupWindowOverridesFocus(t *testing.T) {
 	}
 	cmds, _ := BuildCommands(p)
 	last := cmds[len(cmds)-1]
-	// MatchTabTitle escapes ':' to '\:' in the regex.
-	if !strings.Contains(last, `demo\:b`) {
-		t.Errorf("focus should target b: %s", last)
+	if !containsArg(last, MatchTabTitle(ProjectTabTitle("demo", "b"))) {
+		t.Errorf("focus should target b: %v", last)
 	}
 }
 
@@ -118,25 +164,32 @@ func TestBuildCommands_MultiPaneTab(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	joined := strings.Join(cmds, "\n")
 
-	// Tab launched with first pane's title set
-	if !strings.Contains(joined, `--type=tab`) {
-		t.Errorf("missing tab launch: %s", joined)
+	// First argv: launch --type=tab
+	first := firstArgv(cmds)
+	if !containsArg(first, "--type=tab") {
+		t.Errorf("missing --type=tab launch: %v", first)
 	}
-	// First pane: send command via --hold + sh -c wrap on tab launch (no separate split-window for pane 1)
-	if !strings.Contains(joined, `-- /bin/sh -c 'x'`) {
-		t.Errorf("first pane cmd should be on the tab launch with sh -c wrap: %s", joined)
-	}
-	// First pane window-title must be set after launch (match arg is quoted)
-	if !strings.Contains(joined, `set-window-title --match 'tab_title:^demo\:dev$'`) {
-		t.Errorf("first pane title not set: %s", joined)
+	// First pane cmd via sh -c
+	if !containsArg(first, "x") || !containsArg(first, "-c") {
+		t.Errorf("first pane cmd should be on tab launch with sh -c: %v", first)
 	}
 
-	// Second + third pane: split-window via launch --type=window
+	// First pane window-title must be set after launch
+	found := false
+	for _, argv := range cmds {
+		if argv[0] == "set-window-title" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("first pane title not set:\n%s", renderAll(cmds))
+	}
+
+	// Second + third pane: launch --type=window
 	splits := 0
-	for _, c := range cmds {
-		if strings.Contains(c, "launch --type=window") {
+	for _, argv := range cmds {
+		if argv[0] == "launch" && containsArg(argv, "--type=window") {
 			splits++
 		}
 	}
@@ -146,13 +199,13 @@ func TestBuildCommands_MultiPaneTab(t *testing.T) {
 
 	// Layout default = splits when panes present
 	foundLayout := false
-	for _, c := range cmds {
-		if strings.Contains(c, "goto-layout") && strings.Contains(c, "splits") {
+	for _, argv := range cmds {
+		if argv[0] == "goto-layout" && containsArg(argv, "splits") {
 			foundLayout = true
 		}
 	}
 	if !foundLayout {
-		t.Errorf("expected goto-layout splits: %s", joined)
+		t.Errorf("expected goto-layout splits:\n%s", renderAll(cmds))
 	}
 }
 
@@ -164,13 +217,13 @@ func TestBuildCommands_MultiPaneTabRespectsLayout(t *testing.T) {
 	}
 	cmds, _ := BuildCommands(p)
 	found := false
-	for _, c := range cmds {
-		if strings.Contains(c, "goto-layout") && strings.Contains(c, "tall") {
+	for _, argv := range cmds {
+		if argv[0] == "goto-layout" && containsArg(argv, "tall") {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected goto-layout tall, got %s", strings.Join(cmds, "\n"))
+		t.Errorf("expected goto-layout tall:\n%s", renderAll(cmds))
 	}
 }
 
@@ -181,9 +234,11 @@ func TestBuildCommands_PanesUseLocationHsplit(t *testing.T) {
 			Panes: []spec.Pane{{Title: "p1", Cmd: "x"}, {Title: "p2", Cmd: "y"}}}},
 	}
 	cmds, _ := BuildCommands(p)
-	for _, c := range cmds {
-		if strings.Contains(c, "launch --type=window") && !strings.Contains(c, "--location=hsplit") {
-			t.Errorf("split-window cmd missing --location=hsplit: %s", c)
+	for _, argv := range cmds {
+		if argv[0] == "launch" && containsArg(argv, "--type=window") {
+			if !containsArg(argv, "--location=hsplit") {
+				t.Errorf("split-window cmd missing --location=hsplit: %v", argv)
+			}
 		}
 	}
 }
@@ -197,10 +252,10 @@ func TestBuildCommands_PaneCwdRelativeToTabCwd(t *testing.T) {
 			}}},
 	}
 	cmds, _ := BuildCommands(p)
-	for _, c := range cmds {
-		if strings.Contains(c, "launch --type=window") {
-			if !strings.Contains(c, "--cwd='/home/me/src/lib'") {
-				t.Errorf("pane cwd should be joined: %s", c)
+	for _, argv := range cmds {
+		if argv[0] == "launch" && containsArg(argv, "--type=window") {
+			if !containsArg(argv, "--cwd=/home/me/src/lib") {
+				t.Errorf("pane cwd should be joined: %v", argv)
 			}
 		}
 	}

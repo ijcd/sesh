@@ -1,2 +1,2 @@
-kitten launch --type=tab --tab-title='demo:claude' --cwd='/tmp' --hold -- /bin/sh -c 'claude --continue'
+kitten launch --type='tab' --tab-title='demo:claude' --cwd='/tmp' --hold -- /bin/sh -c 'claude --continue'
 kitten focus-tab --match 'tab_title:^demo\:claude$'

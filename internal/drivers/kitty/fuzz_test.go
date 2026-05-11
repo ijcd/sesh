@@ -24,23 +24,7 @@ func FuzzBuildCommands_NeverPanics(f *testing.F) {
 			Cwd:    cwd,
 			Tabs:   []spec.Tab{{Title: tabTitle, Cmd: tabCmd}},
 		}
-		_, _ = BuildCommands(p)
-	})
-}
-
-func FuzzSplitKittenCommand_NeverPanics(f *testing.F) {
-	f.Add("kitten launch --type=tab --tab-title='demo:shell'")
-	f.Add("kitten focus-tab --match tab_title:^demo$")
-	f.Add("")
-	f.Add("not-a-kitten-command")
-	f.Add("kitten 'unterminated")
-
-	f.Fuzz(func(t *testing.T, line string) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("splitKittenCommand panicked: %v\ninput: %q", r, line)
-			}
-		}()
-		_, _ = splitKittenCommand(line)
+		cmds, _ := BuildCommands(p)
+		_ = RenderCommands(cmds)
 	})
 }

@@ -1,5 +1,5 @@
-kitten launch --type=tab --tab-title='demo:dev' --cwd='/tmp' --hold -- /bin/sh -c 'x'
+kitten launch --type='tab' --tab-title='demo:dev' --cwd='/tmp' --hold -- /bin/sh -c 'x'
 kitten set-window-title --match 'tab_title:^demo\:dev$' 'p1'
-kitten launch --type=window --location=hsplit --match 'tab_title:^demo\:dev$' --window-title='p2' --cwd='/tmp' --hold -- /bin/sh -c 'y'
+kitten launch --type='window' --location='hsplit' --match 'tab_title:^demo\:dev$' --window-title='p2' --cwd='/tmp' --hold -- /bin/sh -c 'y'
 kitten goto-layout --match 'tab_title:^demo\:dev$' 'splits'
 kitten focus-tab --match 'tab_title:^demo\:dev$'
