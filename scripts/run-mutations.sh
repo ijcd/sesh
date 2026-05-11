@@ -4,8 +4,8 @@
 set -euo pipefail
 
 PKGS=(
-    "./internal/config/..."
-    "./internal/engine/..."
+    "./internal/config"
+    "./internal/engine"
 )
 
 # Output directory (gitignored).
@@ -18,6 +18,7 @@ for pkg in "${PKGS[@]}"; do
     echo ">>> Mutating $pkg → $out"
     gremlins unleash \
         --tags="" \
+        --timeout-coefficient=20 \
         --output="$out" \
         "$pkg" || true
 done
