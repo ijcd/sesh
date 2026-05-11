@@ -1,11 +1,4 @@
-__pycache__/
-*.pyc
-*.pyo
 .DS_Store
-.venv/
-*.egg-info/
-dist/
-build/
 
 # Go
 /sesh

@@ -364,7 +364,7 @@ Loading a project file with `extends:` produces a clear error pointing at `inclu
 
 ## Why this exists
 
-There's no mature open-source tool that orchestrates a multi-app project workspace in one declarative spec. Closest: tmuxinator (terminal-only), Bunch (closed-source, procedural macros, no plugin SPI). See `PLAN.md` for the full gap analysis.
+There's no mature open-source tool that orchestrates a multi-app project workspace in one declarative spec. Closest: tmuxinator (terminal-only), Bunch (closed-source, procedural macros, no plugin SPI).
 
 ## Status
 
