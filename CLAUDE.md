@@ -69,6 +69,15 @@ When extending driver support, **update `VALID_PAIRS` and the `validate()` funct
 - `sesh init <shell>` emits embedded shell snippets from `internal/init/scripts/`; never spawns.
 - `sesh up` (no args) reads `$SESH_PROJECT`; explicit arg always wins.
 
+### Testing tags
+
+- (default) — fast unit tests
+- `integration` — real tmux on isolated socket
+- `integration_kitty` — real kitten ls (requires KITTY_LISTEN_ON_TEST env)
+- `integration_cross` — real kitty + real tmux cross-driver dispatch (requires SESH_TEST_KITTY_LAUNCH=1; opens a kitty window)
+- `e2e` — built binary smoke
+- `e2e_docs` — README YAML examples validate
+
 ### Legacy driver notes
 
 - **Hardcoded kitten path**: `KITTEN = "/Applications/kitty.app/Contents/MacOS/kitten"`. macOS-only; will need a lookup if/when Linux support matters.

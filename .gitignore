@@ -13,3 +13,6 @@ build/
 *.out
 .idea/
 .vscode/
+
+# Mutation testing
+gremlins-workdir/
