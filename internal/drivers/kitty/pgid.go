@@ -31,9 +31,9 @@ func systemPgidLookup(ctx context.Context, pids []int) map[int]int {
 //
 // Example input:
 //
-//	  1234   1234
-//	  1235   1234
-//	  1240   1240
+//	1234   1234
+//	1235   1234
+//	1240   1240
 //
 // Returns: {1234: 1234, 1235: 1234, 1240: 1240}.
 func parsePsOutput(out string) map[int]int {
