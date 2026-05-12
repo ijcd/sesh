@@ -180,3 +180,83 @@ func TestCapture_NamingMixedPrefixes(t *testing.T) {
 		t.Errorf("got name %q, want %q", projects[0].Name, "kitty-os-3")
 	}
 }
+
+// TestCapture_PrefersUserVar: window has user_vars.sesh_cmd AND foreground
+// processes — sesh_cmd wins; pgid analysis is not used.
+func TestCapture_PrefersUserVar(t *testing.T) {
+	fr := &fakeRunner{captureOut: `[
+      {"is_focused": true, "tabs": [
+        {"title": "demo:work", "windows": [
+          {"cwd": "/work",
+           "foreground_processes": [{"pid": 10, "cmdline": ["node", "server.js"]}],
+           "user_vars": {"sesh_cmd": "runclaude"}}
+        ]}
+      ]}
+    ]`}
+	d := newWith(fr)
+	d.pgidLookup = alwaysLeader
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
+	projects, err := d.Capture(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
+	}
+	if got := projects[0].Tabs[0].Cmd; got != "runclaude" {
+		t.Errorf("expected user_var sesh_cmd to win, got %q", got)
+	}
+}
+
+// TestCapture_FallsBackWhenUserVarEmpty: missing user_vars.sesh_cmd falls
+// through to the pgid/process-tree path.
+func TestCapture_FallsBackWhenUserVarEmpty(t *testing.T) {
+	fr := &fakeRunner{captureOut: `[
+      {"is_focused": true, "tabs": [
+        {"title": "demo:work", "windows": [
+          {"cwd": "/work",
+           "foreground_processes": [{"pid": 20, "cmdline": ["iex", "-S", "mix"]}]}
+        ]}
+      ]}
+    ]`}
+	d := newWith(fr)
+	d.pgidLookup = alwaysLeader
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
+	projects, err := d.Capture(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
+	}
+	if got := projects[0].Tabs[0].Cmd; got != "iex -S mix" {
+		t.Errorf("expected fallback to process-tree, got %q", got)
+	}
+}
+
+// TestCapture_UserVar_NormalizesShellsToEmpty: a sesh_cmd of "zsh" means the
+// user was at a blank prompt when capture ran — emit empty cmd.
+func TestCapture_UserVar_NormalizesShellsToEmpty(t *testing.T) {
+	fr := &fakeRunner{captureOut: `[
+      {"is_focused": true, "tabs": [
+        {"title": "demo:shell", "windows": [
+          {"cwd": "/home",
+           "foreground_processes": [{"pid": 30, "cmdline": ["zsh"]}],
+           "user_vars": {"sesh_cmd": "zsh"}}
+        ]}
+      ]}
+    ]`}
+	d := newWith(fr)
+	d.pgidLookup = alwaysLeader
+	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/sock")
+	projects, err := d.Capture(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
+	}
+	if got := projects[0].Tabs[0].Cmd; got != "" {
+		t.Errorf("sesh_cmd=zsh should normalize to empty, got %q", got)
+	}
+}

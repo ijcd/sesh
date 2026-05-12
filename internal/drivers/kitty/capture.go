@@ -86,6 +86,13 @@ func captureOSWindow(win kittyOSWindow, pgids map[int]int) *spec.Project {
 			if w.Cwd != "" {
 				cwds = append(cwds, w.Cwd)
 			}
+			// Prefer the shell-recorded command (set by sesh init's preexec hook)
+			// over process-tree analysis. The recorded command captures the user's
+			// typed input verbatim, including shell functions and aliases.
+			if recorded := normalizeRecordedCmd(w.UserVars["sesh_cmd"]); recorded != "" {
+				cmds = append(cmds, recorded)
+				continue
+			}
 			cmdline := pickForegroundCmd(w.ForegroundProcesses, pgids)
 			if c := normalizeCmdline(cmdline); c != "" {
 				cmds = append(cmds, c)
@@ -203,6 +210,22 @@ func normalizeCmdline(cmdline []string) string {
 		}
 	}
 	return strings.Join(cmdline, " ")
+}
+
+// normalizeRecordedCmd cleans a sesh-recorded command. Returns "" for
+// shell-only inputs (the user pressed enter at a prompt). Otherwise the
+// command is returned mostly verbatim.
+func normalizeRecordedCmd(cmd string) string {
+	cmd = strings.TrimSpace(cmd)
+	if cmd == "" {
+		return ""
+	}
+	// Don't dignify shell-builtin-only invocations as "the project's command"
+	switch cmd {
+	case "zsh", "bash", "fish", "sh", "exit":
+		return ""
+	}
+	return cmd
 }
 
 func lastPathSegment(s string) string {

@@ -40,6 +40,7 @@ type kittyWindow struct {
 	IsFocused           bool                  `json:"is_focused"`
 	Cwd                 string                `json:"cwd"`
 	ForegroundProcesses []kittyForegroundProc `json:"foreground_processes"`
+	UserVars            map[string]string     `json:"user_vars,omitempty"`
 }
 type kittyForegroundProc struct {
 	Pid     int      `json:"pid"`

@@ -14,3 +14,13 @@ case "$PROMPT_COMMAND" in
   *__sesh_check_project*) ;;
   *) PROMPT_COMMAND="__sesh_check_project;${PROMPT_COMMAND}" ;;
 esac
+
+# sesh: record each typed command (bash flavor via DEBUG trap).
+__sesh_record_cmd_bash() {
+  # Skip when we're inside PROMPT_COMMAND or shell builtins
+  [[ "$BASH_COMMAND" == "$PROMPT_COMMAND" ]] && return
+  [[ "$BASH_COMMAND" == __sesh_check_project* ]] && return
+  [[ -n "$KITTY_LISTEN_ON" ]] || return
+  kitten @ set-user-vars "sesh_cmd=$BASH_COMMAND" 2>/dev/null
+}
+trap '__sesh_record_cmd_bash' DEBUG

@@ -54,6 +54,7 @@ When extending driver support, **update `containment.go` and the `Validate` func
 - Layout vocab is per-driver verbatim: kitty layouts (`splits`, `tall`, `fat`, `grid`, `horizontal`, `vertical`, `stack`).
 - Cross-driver dispatch for kitty/tmux happens in `engine.Up` via `transformCrossDriverTabs` — the inner tmux session is created first, then the outer kitty tab launches with `cmd: tmux attach -t <inner-name>`.
 - State for `--launch`'d kitty instances lives in `~/.local/state/sesh/state.json` (atomic write under flock).
+- Capture priority: window's `user_vars.sesh_cmd` (set by sesh init's preexec hook) → pgid group leader → lowest-PID fallback.
 
 ## Non-obvious gotchas
 

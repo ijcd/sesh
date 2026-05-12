@@ -18,6 +18,22 @@ func TestRender_Zsh(t *testing.T) {
 	}
 }
 
+func TestRender_Zsh_ContainsPreexecHook(t *testing.T) {
+	s, err := Render("zsh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(s, "__sesh_record_cmd") {
+		t.Errorf("zsh script should define __sesh_record_cmd")
+	}
+	if !strings.Contains(s, "kitten @ set-user-vars") {
+		t.Errorf("zsh script should call kitten @ set-user-vars")
+	}
+	if !strings.Contains(s, "preexec_functions") {
+		t.Errorf("zsh script should append to preexec_functions")
+	}
+}
+
 func TestRender_Bash(t *testing.T) {
 	s, err := Render("bash")
 	if err != nil {
@@ -28,6 +44,22 @@ func TestRender_Bash(t *testing.T) {
 	}
 }
 
+func TestRender_Bash_ContainsPreexecHook(t *testing.T) {
+	s, err := Render("bash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(s, "__sesh_record_cmd_bash") {
+		t.Errorf("bash script should define __sesh_record_cmd_bash")
+	}
+	if !strings.Contains(s, "kitten @ set-user-vars") {
+		t.Errorf("bash script should call kitten @ set-user-vars")
+	}
+	if !strings.Contains(s, "trap") {
+		t.Errorf("bash script should set DEBUG trap")
+	}
+}
+
 func TestRender_Fish(t *testing.T) {
 	s, err := Render("fish")
 	if err != nil {
@@ -35,6 +67,22 @@ func TestRender_Fish(t *testing.T) {
 	}
 	if !strings.Contains(s, "--on-variable PWD") {
 		t.Errorf("fish script should hook on PWD changes")
+	}
+}
+
+func TestRender_Fish_ContainsPreexecHook(t *testing.T) {
+	s, err := Render("fish")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(s, "__sesh_record_cmd") {
+		t.Errorf("fish script should define __sesh_record_cmd")
+	}
+	if !strings.Contains(s, "kitten @ set-user-vars") {
+		t.Errorf("fish script should call kitten @ set-user-vars")
+	}
+	if !strings.Contains(s, "fish_preexec") {
+		t.Errorf("fish script should use fish_preexec event")
 	}
 }
 

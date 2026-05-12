@@ -273,6 +273,8 @@ eval "$(sesh init zsh)"
 
 Prints "sesh: project here — `sesh local` to launch" once per project per shell session. Never spawns anything.
 
+The hook also installs a preexec listener that records each typed command to a kitty per-window user variable (`sesh_cmd`). When you run `sesh capture`, that recorded command is used as-is — no process-tree inspection needed — so aliases, shell functions, and wrapper scripts are captured faithfully.
+
 ## direnv integration
 
 Two touchpoints, both lightweight.

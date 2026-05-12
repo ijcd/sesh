@@ -9,3 +9,9 @@ function __sesh_chpwd --on-variable PWD
   end
 end
 __sesh_chpwd
+
+# sesh: record each typed command (fish flavor).
+function __sesh_record_cmd --on-event fish_preexec
+  test -n "$KITTY_LISTEN_ON"; or return
+  kitten @ set-user-vars "sesh_cmd=$argv" 2>/dev/null
+end
