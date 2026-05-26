@@ -15,6 +15,10 @@ v0.3 in Go (`cmd/sesh`) — tmux + kitty drivers, global config, include:, disco
 - Config loading pipeline: `internal/config/`.
 - Tests: `go test ./...`; integration tags: `integration`, `integration_kitty`, `integration_cross`, `e2e`, `e2e_docs`.
 - Build: `go build -o sesh ./cmd/sesh`.
+- Single test: `go test ./internal/drivers/kitty/ -run TestCapture_MultiTab`.
+- Tagged set: `go test -tags integration ./...` (swap tag as needed).
+- Mutation + coverage gates: `scripts/run-mutations.sh`, `scripts/coverage-gate.sh`; reports land in `gremlins-workdir/`.
+- Go version: pinned via `mise.toml` (currently `latest`).
 
 ## Architecture essentials
 
