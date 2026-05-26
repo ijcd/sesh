@@ -140,6 +140,23 @@ func TestNewCaptureCmd_All_EmitsMultiDoc(t *testing.T) {
 	}
 }
 
+// TestNewCaptureCmd_PositionalAll_Errors: 'capture all' is a common typo for '--all';
+// reject with a hint instead of silently treating "all" as a project name.
+func TestNewCaptureCmd_PositionalAll_Errors(t *testing.T) {
+	e := engine.New()
+	e.Register(mock.New("tmux"))
+
+	cmd := newCaptureCmd(e)
+	cmd.SetArgs([]string{"all"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for positional 'all'")
+	}
+	if !strings.Contains(err.Error(), "--all") {
+		t.Errorf("expected error to mention '--all', got: %v", err)
+	}
+}
+
 // TestNewCaptureCmd_AllWithName_Errors: --all + positional name is mutually exclusive.
 func TestNewCaptureCmd_AllWithName_Errors(t *testing.T) {
 	e := engine.New()
