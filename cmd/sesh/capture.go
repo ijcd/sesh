@@ -30,6 +30,9 @@ func newCaptureCmd(e *engine.Engine) *cobra.Command {
 			if flagAll && len(args) > 0 {
 				return fmt.Errorf("--all and positional name are mutually exclusive")
 			}
+			if len(args) == 1 && args[0] == "all" {
+				return fmt.Errorf("positional name 'all' is ambiguous; did you mean '--all' for multi-doc output?")
+			}
 
 			// no args, no flags → default to --list
 			if !flagAll && len(args) == 0 {

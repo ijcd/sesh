@@ -47,6 +47,11 @@ type kittyForegroundProc struct {
 	Cmdline []string `json:"cmdline"`
 }
 
+// New constructs a kitty Driver with a lazily-built runner. The kitten binary
+// is not located until the first Up/Down/Status/Capture call — a missing
+// kitten surfaces as an error from the dispatch, not from New(). Intentional:
+// keeps cmd-layer registration cheap and lets `sesh validate` report the
+// missing-binary case as a Validate() error rather than a startup crash.
 func New() *Driver {
 	return &Driver{}
 }

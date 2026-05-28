@@ -3,6 +3,21 @@
 **Reviewed against:** `/Users/ijcd/.claude/CLAUDE.md` (Architectural Principles + Functional Core / Imperative Shell).
 **State at audit:** main branch through Plan B (commit `93784b4`). 434 tests, 78.6% coverage.
 
+## Closeout (2026-05-25)
+
+Closed by subsequent commits — see ## Refactor batches below for original priority order.
+
+| # | Status | Resolution |
+|---|---|---|
+| C1, I1 | ✅ closed | `ede4f1e` — `BuildCommands*` returns `[][]string`; split-parsers deleted. |
+| I2 | ✅ closed | `2814f2f` — shared `internal/drivers/exec` package; tmux/kitty wrap it. |
+| I3 | ✅ closed | `6bf33fa` — generic `mergeByTitle[T titled]`. |
+| I4 | ✅ closed | `runProject` extracted to `cmd/sesh/attach.go:41`; up.go and local.go delegate. |
+| I5, I6 | ✅ closed | `4684a6e` — socket threaded through `ctx` via `drivers.WithSocketHint`; no more type-assertion mutation. |
+| I7 | ✅ closed | Lazy-runner tradeoff documented in `kitty/driver.go` `New()` comment. |
+| I8 | ✅ closed | `dexec.FindBin` shared helper; remaining list differences are data, not duplication. |
+| I9–I15, M1–M3 | open | Not yet swept. Sequence per refactor-batches plan below. |
+
 ## Principles applied
 
 Functional core vs imperative shell; flat case over nested if/else; canonicalize before comparing; parameterize helpers in shared components; explicit typed data over string-double-duty; ports-and-adapters; suggestions-not-auto-set; fail-at-runtime-not-deploy; DRY at the helper level; tagged-tuple branching; normalize at ingestion.
