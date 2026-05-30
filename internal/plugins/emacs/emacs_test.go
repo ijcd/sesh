@@ -102,7 +102,7 @@ func TestEmacs_NewRespectsConfigOverrides(t *testing.T) {
 func TestEmacs_UpInvokesEmacsclientWithOpenForm(t *testing.T) {
 	fr := &fakeRunner{} // probe + open form both succeed
 	inst := newInstanceWith(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"},
-		"sesh-open-project", "sesh-close-project", nil, fr)
+		"sesh-open-project", "sesh-close-project", "sesh", nil, fr)
 	if err := inst.Up(context.Background()); err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestEmacs_UpSpawnsDaemonWhenClientErrors(t *testing.T) {
 		},
 	}
 	inst := newInstanceWith(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"},
-		"sesh-open-project", "sesh-close-project", nil, fr)
+		"sesh-open-project", "sesh-close-project", "sesh", nil, fr)
 	if err := inst.Up(context.Background()); err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestEmacs_UpSpawnsDaemonWhenClientErrors(t *testing.T) {
 func TestEmacs_DownInvokesEmacsclientWithCloseForm(t *testing.T) {
 	fr := &fakeRunner{}
 	inst := newInstanceWith(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"},
-		"sesh-open-project", "sesh-close-project", nil, fr)
+		"sesh-open-project", "sesh-close-project", "sesh", nil, fr)
 	if err := inst.Down(context.Background()); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestEmacs_DownInvokesEmacsclientWithCloseForm(t *testing.T) {
 func TestEmacs_DownIdempotentOnClientError(t *testing.T) {
 	fr := &fakeRunner{results: []error{errors.New("nope")}}
 	inst := newInstanceWith(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"},
-		"sesh-open-project", "sesh-close-project", nil, fr)
+		"sesh-open-project", "sesh-close-project", "sesh", nil, fr)
 	if err := inst.Down(context.Background()); err != nil {
 		t.Fatalf("Down returned error (best-effort contract): %v", err)
 	}
@@ -192,7 +192,7 @@ func TestEmacs_DownIdempotentOnClientError(t *testing.T) {
 func TestEmacs_ValidateMissingEmacsclient(t *testing.T) {
 	fr := &fakeRunner{lookErr: errors.New("not found")}
 	inst := newInstanceWith(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"},
-		"sesh-open-project", "sesh-close-project", nil, fr)
+		"sesh-open-project", "sesh-close-project", "sesh", nil, fr)
 	errs := inst.Validate()
 	if len(errs) == 0 {
 		t.Fatal("expected validation error")
@@ -206,7 +206,7 @@ func TestEmacs_ValidateMissingEmacsclient(t *testing.T) {
 func TestEmacs_ValidateBadHookSymbol(t *testing.T) {
 	fr := &fakeRunner{}
 	inst := newInstanceWith(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"},
-		"foo bar", "sesh-close-project", nil, fr)
+		"foo bar", "sesh-close-project", "sesh", nil, fr)
 	errs := inst.Validate()
 	if len(errs) == 0 {
 		t.Fatal("expected validation error")
@@ -227,21 +227,24 @@ func TestEmacs_ValidateBadHookSymbol(t *testing.T) {
 func TestEmacs_DryRunReturnsEmacsclientArgv(t *testing.T) {
 	fr := &fakeRunner{}
 	inst := newInstanceWith(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"},
-		"sesh-open-project", "sesh-close-project", nil, fr)
+		"sesh-open-project", "sesh-close-project", "sesh", nil, fr)
 	argv, err := inst.DryRun()
 	if err != nil {
 		t.Fatalf("DryRun: %v", err)
 	}
-	if len(argv) != 3 {
-		t.Fatalf("expected argv of length 3, got %d: %v", len(argv), argv)
+	if len(argv) != 4 {
+		t.Fatalf("expected argv of length 4, got %d: %v", len(argv), argv)
 	}
 	if argv[0] != "emacsclient" {
 		t.Errorf("argv[0] = %q, want %q", argv[0], "emacsclient")
 	}
-	if argv[1] != "-e" {
-		t.Errorf("argv[1] = %q, want %q", argv[1], "-e")
+	if argv[1] != "--socket-name=sesh" {
+		t.Errorf("argv[1] = %q, want %q", argv[1], "--socket-name=sesh")
 	}
-	if argv[2] != `(sesh-open-project "lib" "/cwd")` {
-		t.Errorf("argv[2] = %q, want %q", argv[2], `(sesh-open-project "lib" "/cwd")`)
+	if argv[2] != "-e" {
+		t.Errorf("argv[2] = %q, want %q", argv[2], "-e")
+	}
+	if argv[3] != `(sesh-open-project "lib" "/cwd")` {
+		t.Errorf("argv[3] = %q, want %q", argv[3], `(sesh-open-project "lib" "/cwd")`)
 	}
 }

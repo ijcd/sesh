@@ -103,10 +103,11 @@ type instance struct {
 }
 
 // newInstanceWith builds an instance with an injected runner. Test-only seam.
-// The daemon name defaults to "sesh" to match the production convention default
+// Callers pass the daemon name explicitly so tests can exercise non-default
+// daemon names; production callers pass "sesh" to match the convention default
 // applied in Plugin.New.
-func newInstanceWith(env plugins.ProjectEnv, hook, close string, files []string, r runner) *instance {
-	return &instance{env: env, hook: hook, close: close, daemon: "sesh", files: files, r: r}
+func newInstanceWith(env plugins.ProjectEnv, hook, close, daemon string, files []string, r runner) *instance {
+	return &instance{env: env, hook: hook, close: close, daemon: daemon, files: files, r: r}
 }
 
 // daemonWaitTimeout caps how long Up waits for a freshly spawned daemon to
@@ -120,15 +121,15 @@ const daemonWaitTimeout = 5 * time.Second
 const daemonPollInterval = 100 * time.Millisecond
 
 // Up dispatches the open hook via emacsclient. If the first call fails it
-// assumes no daemon is running, spawns `emacs --daemon=sesh`, waits for it
-// to become ready, then retries. Idempotent: calling Up twice when the
-// daemon is already up runs the hook twice (the hook itself decides whether
-// to no-op on re-open).
+// assumes no daemon is running, spawns `emacs --daemon=<i.daemon>` (the
+// configured daemon name, default `sesh`), waits for it to become ready,
+// then retries. Idempotent: calling Up twice when the daemon is already up
+// runs the hook twice (the hook itself decides whether to no-op on re-open).
 func (i *instance) Up(ctx context.Context) error {
 	form := BuildOpenForm(i.hook, i.env.Name, i.env.Cwd, i.files)
 	// Probe first: cheap, unambiguous "is daemon up?" signal. The probe is a
 	// no-op elisp form so a successful run proves the daemon answered.
-	if err := i.r.Run(ctx, "emacsclient", "-e", "(emacs-version)"); err != nil {
+	if err := i.r.Run(ctx, "emacsclient", "--socket-name="+i.daemon, "-e", "(emacs-version)"); err != nil {
 		// Probe failed — assume no daemon. Spawn one and wait for readiness.
 		if err := i.r.Run(ctx, "emacs", "--daemon="+i.daemon); err != nil {
 			return fmt.Errorf("emacs: spawn daemon: %w", err)
@@ -137,7 +138,7 @@ func (i *instance) Up(ctx context.Context) error {
 			return fmt.Errorf("emacs: daemon not ready: %w", err)
 		}
 	}
-	if err := i.r.Run(ctx, "emacsclient", "-e", form); err != nil {
+	if err := i.r.Run(ctx, "emacsclient", "--socket-name="+i.daemon, "-e", form); err != nil {
 		return fmt.Errorf("emacs: dispatch open hook: %w", err)
 	}
 	return nil
@@ -148,7 +149,7 @@ func (i *instance) Up(ctx context.Context) error {
 func (i *instance) waitForDaemon(ctx context.Context) error {
 	deadline := time.Now().Add(daemonWaitTimeout)
 	for {
-		if err := i.r.Run(ctx, "emacsclient", "-e", "(emacs-version)"); err == nil {
+		if err := i.r.Run(ctx, "emacsclient", "--socket-name="+i.daemon, "-e", "(emacs-version)"); err == nil {
 			return nil
 		}
 		if time.Now().After(deadline) {
@@ -167,7 +168,7 @@ func (i *instance) waitForDaemon(ctx context.Context) error {
 // not be destructive across projects.
 func (i *instance) Down(ctx context.Context) error {
 	form := BuildCloseForm(i.close, i.env.Name)
-	if err := i.r.Run(ctx, "emacsclient", "-e", form); err != nil {
+	if err := i.r.Run(ctx, "emacsclient", "--socket-name="+i.daemon, "-e", form); err != nil {
 		fmt.Fprintf(os.Stderr, "emacs: dispatch close hook (best-effort, continuing): %v\n", err)
 	}
 	return nil
@@ -201,7 +202,7 @@ func (i *instance) Validate() []error {
 // snapshot, not a state-machine trace.
 func (i *instance) DryRun() ([]string, error) {
 	form := BuildOpenForm(i.hook, i.env.Name, i.env.Cwd, i.files)
-	return []string{"emacsclient", "-e", form}, nil
+	return []string{"emacsclient", "--socket-name=" + i.daemon, "-e", form}, nil
 }
 
 // Compile-time assertions.
