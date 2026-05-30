@@ -25,6 +25,7 @@ import (
 type emacsConfig struct {
 	Hook      string   `yaml:"hook,omitempty"`       // open hook name; default "sesh-open-project"
 	CloseHook string   `yaml:"close_hook,omitempty"` // close hook name; default "sesh-close-project"
+	Daemon    string   `yaml:"daemon,omitempty"`     // daemon name; default "sesh"
 	Files     []string `yaml:"files,omitempty"`      // optional files passed to the hook
 }
 
@@ -74,37 +75,39 @@ func (p *plugin) New(env plugins.ProjectEnv, cfg plugins.RawConfig) (plugins.Ins
 	if c.CloseHook == "" {
 		c.CloseHook = "sesh-close-project"
 	}
+	if c.Daemon == "" {
+		c.Daemon = "sesh"
+	}
 	r := p.r
 	if r == nil {
 		r = execRunner{}
 	}
 	return &instance{
-		env:   env,
-		hook:  c.Hook,
-		close: c.CloseHook,
-		files: c.Files,
-		r:     r,
+		env:    env,
+		hook:   c.Hook,
+		close:  c.CloseHook,
+		daemon: c.Daemon,
+		files:  c.Files,
+		r:      r,
 	}, nil
 }
 
 // instance is one configured emacs sidecar per `sesh up`.
 type instance struct {
-	env   plugins.ProjectEnv
-	hook  string
-	close string
-	files []string
-	r     runner
+	env    plugins.ProjectEnv
+	hook   string
+	close  string
+	daemon string
+	files  []string
+	r      runner
 }
 
 // newInstanceWith builds an instance with an injected runner. Test-only seam.
+// The daemon name defaults to "sesh" to match the production convention default
+// applied in Plugin.New.
 func newInstanceWith(env plugins.ProjectEnv, hook, close string, files []string, r runner) *instance {
-	return &instance{env: env, hook: hook, close: close, files: files, r: r}
+	return &instance{env: env, hook: hook, close: close, daemon: "sesh", files: files, r: r}
 }
-
-// daemonName is the hardcoded emacs daemon name sesh spawns when no daemon is
-// running. Decided in the plan's closed questions: one named daemon for all
-// sesh projects, rather than per-project daemons.
-const daemonName = "sesh"
 
 // daemonWaitTimeout caps how long Up waits for a freshly spawned daemon to
 // become ready (probe via emacsclient succeeds). Five seconds matches the
@@ -127,7 +130,7 @@ func (i *instance) Up(ctx context.Context) error {
 	// no-op elisp form so a successful run proves the daemon answered.
 	if err := i.r.Run(ctx, "emacsclient", "-e", "(emacs-version)"); err != nil {
 		// Probe failed — assume no daemon. Spawn one and wait for readiness.
-		if err := i.r.Run(ctx, "emacs", "--daemon="+daemonName); err != nil {
+		if err := i.r.Run(ctx, "emacs", "--daemon="+i.daemon); err != nil {
 			return fmt.Errorf("emacs: spawn daemon: %w", err)
 		}
 		if err := i.waitForDaemon(ctx); err != nil {
