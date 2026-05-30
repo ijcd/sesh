@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -62,11 +63,14 @@ func (d *driverShim) Validate(p *spec.Project) []error                     { ret
 
 // fakePlugin / fakeInstance let tests assert lifecycle order via a shared log.
 type fakePlugin struct {
-	name    string
-	log     *callLog
-	upErr   error
-	downErr error
-	newErr  error
+	name           string
+	log            *callLog
+	upErr          error
+	downErr        error
+	newErr         error
+	validateErrors []error
+	dryRunArgv     []string
+	dryRunErr      error
 }
 
 func (p *fakePlugin) Name() string { return p.name }
@@ -75,20 +79,26 @@ func (p *fakePlugin) New(env plugins.ProjectEnv, cfg plugins.RawConfig) (plugins
 		return nil, p.newErr
 	}
 	return &fakeInstance{
-		plugin:  p.name,
-		project: env.Name,
-		log:     p.log,
-		upErr:   p.upErr,
-		downErr: p.downErr,
+		plugin:         p.name,
+		project:        env.Name,
+		log:            p.log,
+		upErr:          p.upErr,
+		downErr:        p.downErr,
+		validateErrors: p.validateErrors,
+		dryRunArgv:     p.dryRunArgv,
+		dryRunErr:      p.dryRunErr,
 	}, nil
 }
 
 type fakeInstance struct {
-	plugin  string
-	project string
-	log     *callLog
-	upErr   error
-	downErr error
+	plugin         string
+	project        string
+	log            *callLog
+	upErr          error
+	downErr        error
+	validateErrors []error
+	dryRunArgv     []string
+	dryRunErr      error
 }
 
 func (i *fakeInstance) Up(ctx context.Context) error {
@@ -99,8 +109,8 @@ func (i *fakeInstance) Down(ctx context.Context) error {
 	i.log.add(fmt.Sprintf("plugin:down:%s:%s", i.plugin, i.project))
 	return i.downErr
 }
-func (i *fakeInstance) Validate() []error         { return nil }
-func (i *fakeInstance) DryRun() ([]string, error) { return nil, nil }
+func (i *fakeInstance) Validate() []error         { return i.validateErrors }
+func (i *fakeInstance) DryRun() ([]string, error) { return i.dryRunArgv, i.dryRunErr }
 
 // newRecEngine returns an engine with a driverShim registered under driverName
 // plus the shared log for assertions.
@@ -288,6 +298,60 @@ func TestEngine_PluginsDispatchInAppsListOrder(t *testing.T) {
 	}
 	if idx != len(want) {
 		t.Errorf("plugin:up order != Apps order; want subsequence %v, got log=%v", want, got)
+	}
+}
+
+func TestEngineValidate_InvokesInstanceValidate(t *testing.T) {
+	e, log := newRecEngine("tmux")
+	if err := e.RegisterPlugin(&fakePlugin{
+		name:           "fake",
+		log:            log,
+		validateErrors: []error{errors.New("simulated validate failure")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p := &spec.Project{
+		Name: "x", Driver: "tmux", Cwd: "/tmp",
+		Tabs: []spec.Tab{{Title: "a", Cmd: "echo"}},
+		Apps: []spec.App{spec.NewApp("fake", "")},
+	}
+	err := e.Validate(context.Background(), p)
+	if err == nil {
+		t.Fatal("expected validation error from Instance.Validate()")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "simulated validate failure") {
+		t.Errorf("error missing instance validate message; got %q", msg)
+	}
+	if !strings.Contains(msg, "apps[0]") {
+		t.Errorf("error missing apps[0] prefix; got %q", msg)
+	}
+	if !strings.Contains(msg, "fake") {
+		t.Errorf("error missing plugin name; got %q", msg)
+	}
+}
+
+func TestEngineDebug_IncludesPluginDryRun(t *testing.T) {
+	e, log := newRecEngine("tmux")
+	if err := e.RegisterPlugin(&fakePlugin{
+		name:       "fake",
+		log:        log,
+		dryRunArgv: []string{"fake-cmd", "arg1", "arg2"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p := &spec.Project{
+		Name: "x", Driver: "tmux", Cwd: "/tmp",
+		Tabs: []spec.Tab{{Title: "a", Cmd: "echo"}},
+		Apps: []spec.App{spec.NewApp("fake", "")},
+	}
+	var buf bytes.Buffer
+	if err := e.Debug(context.Background(), p, true, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "fake-cmd arg1 arg2") {
+		t.Errorf("output missing plugin dry-run argv; got %q", out)
 	}
 }
 

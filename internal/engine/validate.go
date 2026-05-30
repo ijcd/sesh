@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/ijcd/sesh/internal/config"
+	"github.com/ijcd/sesh/internal/plugins"
 	"github.com/ijcd/sesh/internal/spec"
 )
 
@@ -28,6 +29,27 @@ func (e *Engine) Validate(_ context.Context, p *spec.Project) error {
 	// engine layer is where the registry lives).
 	for _, ve := range config.ValidateAppsWithRegistry(p, e.registry) {
 		errs = append(errs, ve)
+	}
+	// Plugin-instance validation: each registered app gets its Validate()
+	// run so configuration errors (e.g. missing emacsclient) surface here
+	// rather than at `sesh up`.
+	for i, app := range p.Apps {
+		plg, ok := e.registry.Get(app.Plugin)
+		if !ok {
+			continue // unregistered already caught by ValidateAppsWithRegistry above
+		}
+		raw := app.Raw
+		if raw == nil {
+			raw = plugins.NewRawConfig(nil)
+		}
+		inst, err := plg.New(plugins.ProjectEnv{Name: p.Name, Cwd: p.Cwd}, raw)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("apps[%d] %s: New failed: %w", i, app.Plugin, err))
+			continue
+		}
+		for _, ve := range inst.Validate() {
+			errs = append(errs, fmt.Errorf("apps[%d] %s: %w", i, app.Plugin, ve))
+		}
 	}
 	// Tab-driver overrides also get their driver's Validate.
 	seen := map[string]bool{p.Driver: true}
