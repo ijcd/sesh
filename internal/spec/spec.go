@@ -36,6 +36,20 @@ type Project struct {
 	Hooks         Hooks             `yaml:"hooks,omitempty"`
 	PreWindow     StringList        `yaml:"pre_window,omitempty"`
 	Tabs          []Tab             `yaml:"tabs,omitempty"`
+	Apps          []App             `yaml:"apps,omitempty"`
+}
+
+// UnmarshalYAML decodes a Project via the default field-tag path, then
+// normalizes the apps[] list (auto-indexing absent IDs per plugin).
+func (p *Project) UnmarshalYAML(b []byte) error {
+	type projectAlias Project
+	var raw projectAlias
+	if err := yaml.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	*p = Project(raw)
+	p.normalizeApps()
+	return nil
 }
 
 type Tab struct {
