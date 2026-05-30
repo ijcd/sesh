@@ -3,9 +3,11 @@ package engine
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/ijcd/sesh/internal/drivers"
+	"github.com/ijcd/sesh/internal/plugins"
 	"github.com/ijcd/sesh/internal/spec"
 )
 
@@ -123,6 +125,51 @@ func (e *Engine) Up(ctx context.Context, p *spec.Project, force bool) error {
 	}
 	if err := RunHooks(ctx, "on_project_start", pp.Hooks.OnStart, pp.Cwd); err != nil {
 		return err
+	}
+	if err := runPluginsUp(ctx, e, pp); err != nil {
+		return err
+	}
+	return nil
+}
+
+// runPluginsUp iterates the project's Apps in declared order, decodes each
+// entry via Plugin.New, and calls Instance.Up. Dispatch order is the user's
+// Apps list — registry order is irrelevant to dispatch.
+//
+// Failure semantics: if App.Optional is true, a New/Up error is logged to
+// stderr and iteration continues. Otherwise the error aborts with no further
+// plugins run (partial state stays per project policy).
+func runPluginsUp(ctx context.Context, e *Engine, p *spec.Project) error {
+	env := plugins.ProjectEnv{Name: p.Name, Cwd: p.Cwd}
+	for i, app := range p.Apps {
+		plg, ok := e.registry.Get(app.Plugin)
+		if !ok {
+			err := fmt.Errorf("apps[%d]: plugin %q not registered", i, app.Plugin)
+			if app.Optional {
+				fmt.Fprintf(os.Stderr, "engine: plugin %q failed (optional, continuing): %v\n", app.Plugin, err)
+				continue
+			}
+			return err
+		}
+		raw := app.Raw
+		if raw == nil {
+			raw = plugins.NewRawConfig(nil)
+		}
+		inst, err := plg.New(env, raw)
+		if err != nil {
+			if app.Optional {
+				fmt.Fprintf(os.Stderr, "engine: plugin %q failed (optional, continuing): %v\n", app.Plugin, err)
+				continue
+			}
+			return fmt.Errorf("apps[%d] %s: %w", i, app.Key(), err)
+		}
+		if err := inst.Up(ctx); err != nil {
+			if app.Optional {
+				fmt.Fprintf(os.Stderr, "engine: plugin %q failed (optional, continuing): %v\n", app.Plugin, err)
+				continue
+			}
+			return fmt.Errorf("apps[%d] %s: %w", i, app.Key(), err)
+		}
 	}
 	return nil
 }
