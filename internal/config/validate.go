@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 
+	"github.com/ijcd/sesh/internal/plugins"
 	"github.com/ijcd/sesh/internal/spec"
 )
 
@@ -16,7 +17,16 @@ func (e ValidationError) Error() string { return fmt.Sprintf("%s: %s", e.Path, e
 
 // Validate checks structural rules. Mutates p only to default the Driver field
 // when empty. Returns all violations (caller decides how to surface them).
+//
+// Plugin-registry membership is not checked here — pass a non-nil registry
+// to ValidateWithRegistry for that. T5 wires it from the engine.
 func Validate(p *spec.Project, registeredDrivers []string) []error {
+	return ValidateWithRegistry(p, registeredDrivers, nil)
+}
+
+// ValidateWithRegistry adds plugin-registry membership checks to Validate.
+// Pass registry=nil to skip the check (useful pre-engine-wire and in tests).
+func ValidateWithRegistry(p *spec.Project, registeredDrivers []string, registry *plugins.Registry) []error {
 	var errs []error
 
 	if p.Driver == "" {
@@ -77,6 +87,45 @@ func Validate(p *spec.Project, registeredDrivers []string) []error {
 					Reason: fmt.Sprintf("duplicate title %q", pn.Title)})
 			}
 			seenPane[pn.Title] = true
+		}
+	}
+
+	errs = append(errs, validateApps(p, registry)...)
+	return errs
+}
+
+// validateApps checks structural rules for a project's apps[]:
+//   - every entry has a non-empty Plugin name;
+//   - explicit IDs are unique per plugin (auto-indexed IDs are already
+//     unique by construction in spec.normalizeApps);
+//   - if registry is non-nil, every entry's Plugin is registered.
+//
+// Registry can be nil (engine wires it in T5). When nil, the
+// registered-plugin check is skipped.
+func validateApps(p *spec.Project, registry *plugins.Registry) []error {
+	var errs []error
+	type pidKey struct{ plugin, id string }
+	seen := map[pidKey]int{}
+	for i, a := range p.Apps {
+		prefix := fmt.Sprintf("apps[%d]", i)
+		if a.Plugin == "" {
+			errs = append(errs, ValidationError{Path: prefix + ".plugin", Reason: "required"})
+			continue
+		}
+		if a.ID != "" {
+			k := pidKey{a.Plugin, a.ID}
+			if prev, ok := seen[k]; ok {
+				errs = append(errs, ValidationError{Path: prefix + ".id",
+					Reason: fmt.Sprintf("duplicate id %q for plugin %q (also at apps[%d])", a.ID, a.Plugin, prev)})
+			} else {
+				seen[k] = i
+			}
+		}
+		if registry != nil {
+			if _, ok := registry.Get(a.Plugin); !ok {
+				errs = append(errs, ValidationError{Path: prefix + ".plugin",
+					Reason: fmt.Sprintf("plugin %q not registered (registered: %v)", a.Plugin, registry.Names())})
+			}
 		}
 	}
 	return errs

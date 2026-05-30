@@ -19,6 +19,7 @@ func Merge(parent, child *spec.Project) *spec.Project {
 		Hooks:         mergeHooks(parent.Hooks, child.Hooks),
 		PreWindow:     appendStrings(parent.PreWindow, child.PreWindow),
 		Tabs:          mergeTabs(parent.Tabs, child.Tabs),
+		Apps:          mergeApps(parent.Apps, child.Apps),
 	}
 	return out
 }
@@ -141,5 +142,36 @@ func mergePane(p, c spec.Pane) spec.Pane {
 		Cwd:   coalesce(c.Cwd, p.Cwd),
 		Cmd:   coalesce(c.Cmd, p.Cmd),
 		Drop:  false,
+	}
+}
+
+// mergeApps merges parent's and child's app lists by App.Key().
+//
+// Rules:
+//   - Same Key collapses: child's envelope scalars (Optional) win; child's
+//     Raw replaces parent's Raw entirely (Raw is opaque, so no deep-merge —
+//     partial overrides are expressed by re-stating the whole block).
+//   - Child entry with Drop=true removes the inherited match by Key.
+//   - New keys in child append after parent entries, mirroring tab/pane
+//     semantics.
+func mergeApps(parent, child []spec.App) []spec.App {
+	return mergeByTitle(parent, child,
+		func(a spec.App) string { return a.Key() },
+		func(a spec.App) bool { return a.Drop },
+		mergeApp,
+	)
+}
+
+// mergeApp collapses two same-Key Apps. Child's Optional wins outright
+// (boolean scalars are not three-valued here — absence in child YAML decodes
+// to false, same as an explicit false; lifting to *bool is a future change).
+// Child's Raw replaces parent's; opaque blocks merge by replacement.
+func mergeApp(p, c spec.App) spec.App {
+	return spec.App{
+		Plugin:   p.Plugin,
+		ID:       p.ID,
+		Optional: c.Optional,
+		Drop:     false,
+		Raw:      c.Raw,
 	}
 }

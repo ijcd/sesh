@@ -15,7 +15,19 @@ type App struct {
 	Plugin   string            // required; names the registered plugin
 	ID       string            // optional in YAML; auto-indexed at parse
 	Optional bool              // soft-fail if true; default false (hard-fail)
+	Drop     bool              // merge sentinel: child entry removes inherited match by Key
 	Raw      plugins.RawConfig // opaque remainder for the plugin
+}
+
+// NewApp constructs an App with a non-nil Raw (a no-op RawConfig). Use for
+// programmatic construction in tests, defaults, or migrations — the YAML
+// path already populates Raw via UnmarshalYAML.
+func NewApp(plugin, id string) App {
+	return App{
+		Plugin: plugin,
+		ID:     id,
+		Raw:    plugins.NewRawConfig(nil),
+	}
 }
 
 // Key returns a stable identity for merge-by-key. First sighting of a plugin
@@ -41,6 +53,7 @@ func (a *App) UnmarshalYAML(node ast.Node) error {
 		Plugin   string `yaml:"plugin"`
 		ID       string `yaml:"id,omitempty"`
 		Optional bool   `yaml:"optional,omitempty"`
+		Drop     bool   `yaml:"drop,omitempty"`
 	}
 	if err := yaml.NodeToValue(node, &env); err != nil {
 		return err
@@ -48,6 +61,7 @@ func (a *App) UnmarshalYAML(node ast.Node) error {
 	a.Plugin = env.Plugin
 	a.ID = env.ID
 	a.Optional = env.Optional
+	a.Drop = env.Drop
 	a.Raw = plugins.NewRawConfig(node)
 	return nil
 }
