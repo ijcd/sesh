@@ -33,6 +33,6 @@ func Render(target string) (string, error) {
 	case "emacs":
 		return recipe.Source(), nil
 	default:
-		return "", fmt.Errorf("unknown shell %q (supported: zsh, bash, fish, emacs)", target)
+		return "", fmt.Errorf("unknown init target %q (supported: zsh, bash, fish, emacs)", target)
 	}
 }

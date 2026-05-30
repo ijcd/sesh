@@ -59,8 +59,8 @@ func TestNewInitCmd_UnknownShellErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown shell")
 	}
-	if !strings.Contains(err.Error(), "unknown shell") {
-		t.Errorf("error should mention 'unknown shell', got: %v", err)
+	if !strings.Contains(err.Error(), "unknown init target") {
+		t.Errorf("error should mention 'unknown init target', got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "emacs") {
 		t.Errorf("error should list emacs in valid targets, got: %v", err)
