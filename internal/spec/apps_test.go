@@ -65,6 +65,24 @@ apps:
 	}
 }
 
+func TestApp_DropFieldDecodesFromYAML(t *testing.T) {
+	in := []byte(`
+apps:
+  - plugin: emacs
+    drop: true
+`)
+	var p Project
+	if err := yaml.Unmarshal(in, &p); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(p.Apps) != 1 {
+		t.Fatalf("len(apps) = %d, want 1", len(p.Apps))
+	}
+	if !p.Apps[0].Drop {
+		t.Errorf("Apps[0].Drop = false, want true")
+	}
+}
+
 func TestApp_RawCarriesOpaqueRemainder(t *testing.T) {
 	in := []byte(`
 apps:
