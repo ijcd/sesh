@@ -94,9 +94,25 @@ func TestRender_UnknownShell(t *testing.T) {
 	if !strings.Contains(err.Error(), "ksh") {
 		t.Errorf("error should name the unknown shell: %v", err)
 	}
-	for _, want := range []string{"zsh", "bash", "fish"} {
+	for _, want := range []string{"zsh", "bash", "fish", "emacs"} {
 		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error should list supported shell %q: %v", want, err)
+			t.Errorf("error should list supported target %q: %v", want, err)
+		}
+	}
+}
+
+func TestRender_Emacs(t *testing.T) {
+	s, err := Render("emacs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"(defun sesh-open-project",
+		"(defun sesh-close-project",
+		"(provide 'sesh)",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("emacs recipe missing %q", want)
 		}
 	}
 }

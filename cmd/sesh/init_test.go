@@ -62,4 +62,27 @@ func TestNewInitCmd_UnknownShellErrors(t *testing.T) {
 	if !strings.Contains(err.Error(), "unknown shell") {
 		t.Errorf("error should mention 'unknown shell', got: %v", err)
 	}
+	if !strings.Contains(err.Error(), "emacs") {
+		t.Errorf("error should list emacs in valid targets, got: %v", err)
+	}
+}
+
+func TestNewInitCmd_Emacs(t *testing.T) {
+	cmd := newInitCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{"emacs"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"(defun sesh-open-project",
+		"(defun sesh-close-project",
+		"(provide 'sesh)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("emacs init output missing %q", want)
+		}
+	}
 }

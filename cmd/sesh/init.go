@@ -10,14 +10,24 @@ import (
 
 func newInitCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "init <shell>",
-		Short: "Print shell init script for the discovery hook",
-		Long: `Emit a shell snippet to eval from your rc:
+		Use:   "init <target>",
+		Short: "Print init snippet for a shell hook or the emacs recipe",
+		Long: `Emit an init snippet for the given target.
 
-    eval "$(sesh init zsh)"      # or bash, or fish
+Shells (zsh / bash / fish) -- eval from your rc:
 
-The hook prints "sesh: project here" when you cd into a directory
-containing .sesh.yml. It never spawns anything.`,
+    eval "$(sesh init zsh)"
+
+The shell hook prints "sesh: project here" when you cd into a directory
+containing .sesh.yml. It never spawns anything.
+
+Emacs -- load from init.el:
+
+    sesh init emacs > ~/.emacs.d/sesh.el
+    ;; (load-file "~/.emacs.d/sesh.el")
+
+Emits the default sesh-open-project / sesh-close-project hooks (tab-bar
+based). Replace with your own policy at will -- sesh only dispatches.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := seshinit.Render(args[0])
