@@ -83,4 +83,4 @@ When extending driver support, **update `containment.go` and the `Validate` func
 
 - For "how is X configured?" — read `docs/superpowers/specs/` for design rationale not in the code.
 - Pre-v1 means no backwards-compatibility burden yet. Prefer changing the schema cleanly over adding migration shims.
-- Future plugin SPI (v0.4) will introduce `Driver` interface extensions for non-terminal drivers (editor, browser). Design rationale lives in `docs/superpowers/specs/`.
+- Plugin SPI (v0.4) is implemented: `internal/plugins/` defines `Plugin`/`Instance`; `apps:` envelopes route opaquely to each plugin. Emacs is the reference consumer (`internal/plugins/emacs/`). Mechanism-not-policy: core owns lifecycle + envelope, plugins own everything app-shaped. README has a worked `apps:` example; plan at `docs/superpowers/plans/2026-05-28-sesh-v0.4-plugin-spi.md` is the source of truth (the 2026-05-25 spec is superseded).

@@ -2,7 +2,7 @@
 
 One command to bring up everything a project needs: terminal tabs, panes, hooks, and (eventually) editor / browser / comms / Spaces.
 
-Like tmuxinator, but multi-driver from the start (tmux + kitty in v0.2; editor / browser / comms plugins planned).
+Like tmuxinator, but multi-driver from the start (tmux + kitty terminal drivers; emacs editor plugin in v0.4; browser / comms plugins planned).
 
 ## Install
 
@@ -48,6 +48,7 @@ sesh down hello     # tears it down
 | `sesh validate <name>` | Parse + merge + driver-validate without spawning. |
 | `sesh local [--launch]` | Use `./.sesh.yml` from CWD (per-repo configs). |
 | `sesh completion <shell>` | Shell completion script (cobra-built). |
+| `sesh init <target>` | Print init snippet. Targets: `zsh`/`bash`/`fish` (shell discovery hook) or `emacs` (default `sesh-open-project` recipe). |
 | `sesh --version` | Print version. |
 
 Project files: `~/.config/sesh/projects/<name>.yml`.
@@ -262,6 +263,33 @@ sesh capture my-new-project > ~/.config/sesh/projects/my-new-project.yml
 
 Print to stdout, review, edit, then save as a project config. Never writes to disk directly — all capture output is suggestion-only.
 
+### 9. Editor: emacs sidecar via the plugin SPI (v0.4)
+
+sesh dispatches non-terminal sidecars (editors, browsers, comms) after the terminal layer is up. v0.4 ships the emacs plugin; more drivers land in v0.5+.
+
+```yaml
+# ~/.config/sesh/projects/liberties-emacs.yml
+driver: kitty
+cwd: ~/work/liberties
+tabs:
+  - title: dev
+    cmd: claude --continue
+apps:
+  - plugin: emacs
+    files:
+      - ./README.md
+      - ./mix.exs
+```
+
+`sesh up liberties-emacs` brings up the kitty tab, then runs `(sesh-open-project "liberties-emacs" "/Users/me/work/liberties" '("/Users/me/work/liberties/README.md" "/Users/me/work/liberties/mix.exs"))` against your emacs daemon. **sesh provides mechanism; your emacs config provides policy** — the `sesh-open-project` function is yours to define. Get a sensible default tab-bar-based recipe with:
+
+```sh
+sesh init emacs >> ~/.emacs.d/sesh.el
+echo '(load-file "~/.emacs.d/sesh.el")' >> ~/.emacs.d/init.el
+```
+
+Or copy and customize freely. Hook names, daemon name, and files are configurable per-entry in the YAML; full schema below.
+
 ## Discovery hook (`sesh init`)
 
 Add to your shell rc to be told when you cd into a sesh project:
@@ -344,7 +372,21 @@ Loading a project file with `extends:` produces a clear error pointing at `inclu
 | `tabs[].panes[].title` | string | Required. |
 | `tabs[].panes[].cmd` | string | Required. |
 | `tabs[].panes[].cwd` | path | Default = tab cwd. Relative path joins parent. |
-| `drop: true` | on tab/pane | Sentinel — remove this entry from the inherited template. |
+| `apps` | list | Non-terminal plugin sidecars dispatched after drivers up. Each entry has `plugin` + opaque per-plugin keys. v0.4 ships `emacs`. |
+| `apps[].plugin` | string | Required. Names the registered plugin (`emacs` in v0.4). |
+| `apps[].id` | string | Optional. Disambiguates multiple entries with the same plugin; auto-indexed (`emacs`, `emacs#2`, …) when omitted. |
+| `apps[].optional` | bool | Default `false`. When `true`, plugin failure is logged but `sesh up` continues. |
+| `apps[].drop` | bool | Merge sentinel: child entry removes inherited match by key (parallel to `tabs[].drop`). |
+| `drop: true` | on tab/pane/app | Sentinel — remove this entry from the inherited template. |
+
+**Emacs plugin keys** (under an `apps[]` entry with `plugin: emacs`):
+
+| Key | Default | Notes |
+|---|---|---|
+| `hook` | `sesh-open-project` | Elisp symbol called on `sesh up`. Receives `(name cwd files)`. |
+| `close_hook` | `sesh-close-project` | Elisp symbol called on `sesh down`. Receives `(name)`. Best-effort. |
+| `daemon` | `sesh` | `emacsclient --socket-name=<daemon>`; spawned via `emacs --daemon=<daemon>` if absent. |
+| `files` | _(none)_ | Optional list of paths; relative paths absolutized against project `cwd`. |
 
 **Merge rules** (when `include:` is used):
 
@@ -370,14 +412,14 @@ There's no mature open-source tool that orchestrates a multi-app project workspa
 
 ## Status
 
-**Pre-v1.** v0.3: tmux + kitty drivers, `include:` composition, global defaults file, `sesh init` discovery hook, `$SESH_PROJECT` direnv connector. ~250 tests.
+**Pre-v1.** v0.4: tmux + kitty drivers, `include:` composition, global defaults file, `sesh init` discovery hook, `$SESH_PROJECT` direnv connector, plugin SPI with the emacs reference plugin. ~330 tests.
 
 ## Roadmap
 
 - **v0.1** — tmux driver, tmuxinator parity ✓
 - **v0.2** — kitty driver, --launch, full containment ✓
-- **v0.3** (current) — global config, include:, sesh init, direnv connector
-- **v0.4** — plugin SPI definition; first non-terminal plugin (editor — emacs)
+- **v0.3** — global config, include:, sesh init, direnv connector ✓
+- **v0.4** (current) — plugin SPI (mechanism-not-policy); emacs reference plugin; `apps:` envelope
 - **v0.5** — browser plugin
 - **v1.0** — comms + Spaces + packaging
 
