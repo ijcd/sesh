@@ -8,7 +8,7 @@ import (
 // fakePlugin is a minimal in-test Plugin implementation.
 type fakePlugin struct{ name string }
 
-func (f fakePlugin) Name() string                                  { return f.name }
+func (f fakePlugin) Name() string                                        { return f.name }
 func (f fakePlugin) New(env ProjectEnv, cfg RawConfig) (Instance, error) { return nil, nil }
 
 func TestRegistry_GetReturnsRegisteredPlugin(t *testing.T) {
