@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/ijcd/sesh/internal/drivers/tmux"
 	"github.com/ijcd/sesh/internal/engine"
 	"github.com/ijcd/sesh/internal/plugins/emacs"
+	luaplug "github.com/ijcd/sesh/internal/plugins/lua"
 )
 
 const Version = "0.1.0-dev"
@@ -22,6 +24,16 @@ func newRootCmd() *cobra.Command {
 		// (root setup is the only call site). Panic mirrors how cobra
 		// itself treats duplicate command registration.
 		panic(fmt.Errorf("sesh: register emacs plugin: %w", err))
+	}
+	// v0.5 spike: opt-in Lua plugin bridge. Registers embedded "emacs-lua"
+	// (and any ~/.config/sesh/plugins/*.lua) alongside the Go "emacs"
+	// plugin so both are available for A/B comparison. The Lua name is
+	// distinct ("emacs-lua") so it does not collide; apps[] must opt in
+	// by referencing it explicitly.
+	if os.Getenv("SESH_USE_LUA_PLUGINS") != "" {
+		if _, err := luaplug.LoadAll(e.RegisterPlugin); err != nil {
+			panic(fmt.Errorf("sesh: load lua plugins: %w", err))
+		}
 	}
 
 	cmd := &cobra.Command{
