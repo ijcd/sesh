@@ -144,12 +144,11 @@ func runPluginsUp(ctx context.Context, e *Engine, p *spec.Project) error {
 	for i, app := range p.Apps {
 		plg, ok := e.registry.Get(app.Plugin)
 		if !ok {
-			err := fmt.Errorf("apps[%d]: plugin %q not registered", i, app.Plugin)
 			if app.Optional {
-				fmt.Fprintf(os.Stderr, "engine: plugin %q failed (optional, continuing): %v\n", app.Plugin, err)
+				fmt.Fprintf(os.Stderr, "engine: plugin %q not registered (optional, continuing)\n", app.Plugin)
 				continue
 			}
-			return err
+			return fmt.Errorf("apps[%d]: plugin %q not registered", i, app.Plugin)
 		}
 		raw := app.Raw
 		if raw == nil {
@@ -158,17 +157,17 @@ func runPluginsUp(ctx context.Context, e *Engine, p *spec.Project) error {
 		inst, err := plg.New(env, raw)
 		if err != nil {
 			if app.Optional {
-				fmt.Fprintf(os.Stderr, "engine: plugin %q failed (optional, continuing): %v\n", app.Plugin, err)
+				fmt.Fprintf(os.Stderr, "engine: plugin %q: New failed (optional, continuing): %v\n", app.Plugin, err)
 				continue
 			}
-			return fmt.Errorf("apps[%d] %s: %w", i, app.Key(), err)
+			return fmt.Errorf("apps[%d] %s: New failed: %w", i, app.Key(), err)
 		}
 		if err := inst.Up(ctx); err != nil {
 			if app.Optional {
-				fmt.Fprintf(os.Stderr, "engine: plugin %q failed (optional, continuing): %v\n", app.Plugin, err)
+				fmt.Fprintf(os.Stderr, "engine: plugin %q: Up failed (optional, continuing): %v\n", app.Plugin, err)
 				continue
 			}
-			return fmt.Errorf("apps[%d] %s: %w", i, app.Key(), err)
+			return fmt.Errorf("apps[%d] %s: Up failed: %w", i, app.Key(), err)
 		}
 	}
 	return nil

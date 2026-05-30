@@ -94,6 +94,13 @@ func ValidateWithRegistry(p *spec.Project, registeredDrivers []string, registry 
 	return errs
 }
 
+// ValidateAppsWithRegistry runs only the apps[]-related checks. Engine uses
+// this to add plugin-registry membership checks without re-running driver/tab
+// validation (which engine handles via driver.Validate + CheckContainment).
+func ValidateAppsWithRegistry(p *spec.Project, registry *plugins.Registry) []error {
+	return validateApps(p, registry)
+}
+
 // validateApps checks structural rules for a project's apps[]:
 //   - every entry has a non-empty Plugin name;
 //   - explicit IDs are unique per plugin (auto-indexed IDs are already

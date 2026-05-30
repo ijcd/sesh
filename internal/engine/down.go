@@ -15,9 +15,7 @@ func (e *Engine) Down(ctx context.Context, p *spec.Project) error {
 	}
 	// Plugins go down before the driver: app-side teardown should happen
 	// while the host terminal is still alive.
-	if err := runPluginsDown(ctx, e, p); err != nil {
-		return err
-	}
+	runPluginsDown(ctx, e, p)
 	d, err := e.driverFor(p.Driver)
 	if err != nil {
 		return err
@@ -28,7 +26,7 @@ func (e *Engine) Down(ctx context.Context, p *spec.Project) error {
 // runPluginsDown walks p.Apps in REVERSE declared order, best-effort. Errors
 // from Plugin.New or Instance.Down are logged to stderr and iteration
 // continues — teardown does not abort on a single plugin failure.
-func runPluginsDown(ctx context.Context, e *Engine, p *spec.Project) error {
+func runPluginsDown(ctx context.Context, e *Engine, p *spec.Project) {
 	env := plugins.ProjectEnv{Name: p.Name, Cwd: p.Cwd}
 	for i := len(p.Apps) - 1; i >= 0; i-- {
 		app := p.Apps[i]
@@ -51,5 +49,4 @@ func runPluginsDown(ctx context.Context, e *Engine, p *spec.Project) error {
 			continue
 		}
 	}
-	return nil
 }

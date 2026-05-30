@@ -202,6 +202,30 @@ func TestEngineUp_OptionalPluginSoftFails(t *testing.T) {
 	}
 }
 
+func TestEngineDown_UnregisteredPluginContinues(t *testing.T) {
+	e, log := newRecEngine("tmux")
+	// No plugin registered, but the project references one.
+	p := &spec.Project{
+		Name: "x", Driver: "tmux", Cwd: "/tmp",
+		Tabs: []spec.Tab{{Title: "a", Cmd: "echo"}},
+		Apps: []spec.App{spec.NewApp("ghost", "")},
+	}
+	if err := e.Down(context.Background(), p); err != nil {
+		t.Fatalf("Down must not abort on unregistered plugin; got %v", err)
+	}
+	got := log.snapshot()
+	wantDriver := "driver:down:x"
+	found := false
+	for _, s := range got {
+		if s == wantDriver {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("driver.Down must still run after plugin miss; log=%v", got)
+	}
+}
+
 func TestEngineUp_RequiredPluginErrorAborts(t *testing.T) {
 	e, log := newRecEngine("tmux")
 	if err := e.RegisterPlugin(&fakePlugin{name: "bad", log: log, upErr: errors.New("boom")}); err != nil {

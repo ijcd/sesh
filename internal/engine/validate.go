@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/ijcd/sesh/internal/config"
 	"github.com/ijcd/sesh/internal/spec"
@@ -27,14 +26,8 @@ func (e *Engine) Validate(_ context.Context, p *spec.Project) error {
 	}
 	// Plugin-registry membership check (config.Validate is driver-only;
 	// engine layer is where the registry lives).
-	for _, ve := range config.ValidateWithRegistry(p, e.Drivers(), e.registry) {
-		// Restrict to plugin-related errors — driver/tabs checks are already
-		// covered above (driver Validate + containment).
-		if ce, ok := ve.(config.ValidationError); ok {
-			if strings.HasPrefix(ce.Path, "apps") {
-				errs = append(errs, ve)
-			}
-		}
+	for _, ve := range config.ValidateAppsWithRegistry(p, e.registry) {
+		errs = append(errs, ve)
 	}
 	// Tab-driver overrides also get their driver's Validate.
 	seen := map[string]bool{p.Driver: true}
