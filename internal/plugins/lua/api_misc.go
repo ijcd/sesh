@@ -8,6 +8,25 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
+// fileExistsFunc is the dispatch seam for sesh.file_exists. Tests override
+// to simulate present/missing files without touching the filesystem.
+// Default impl is os.Stat — error means "doesn't exist (or unreadable)",
+// which we treat as false. Mirrors the seam pattern from execRunner /
+// pathLookup so plugin tests can script fallback-path detection.
+var fileExistsFunc = func(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// luaFileExists implements sesh.file_exists(path) -> bool. Useful for
+// plugins that probe a well-known fallback path (e.g., an .app bundle)
+// when PATH lookup misses.
+func luaFileExists(L *lua.LState) int {
+	path := L.CheckString(1)
+	L.Push(lua.LBool(fileExistsFunc(path)))
+	return 1
+}
+
 // luaWaitFor implements sesh.wait_for(predicate, timeout_ms). Polls the
 // predicate every 100ms; returns true on truthy, false on timeout.
 // Predicate errors (via Lua error()) are re-raised as Lua errors via

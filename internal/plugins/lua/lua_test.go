@@ -685,6 +685,189 @@ func TestEmacsLua_ValidateMissingEmacsclient(t *testing.T) {
 	}
 }
 
+// --- Firefox Lua plugin test ladder -----------------------------------
+//
+// Mirrors the v0.5 Task 4 spec: firefox plugin shells out to
+// `firefox -CreateProfile <name>` (idempotent) and `firefox -P <name>
+// --new-instance [url]` (detached). Validate checks PATH or app-bundle
+// fallback. Down is a no-op unless kill_on_down dispatches AppleScript.
+
+// loadFirefoxLuaPlugin loads the embedded firefox.lua and returns its plugin.
+func loadFirefoxLuaPlugin(t *testing.T) plugins.Plugin {
+	t.Helper()
+	reg := plugins.NewRegistry()
+	if _, err := LoadAll(reg.Register); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	p, ok := reg.Get("firefox")
+	if !ok {
+		t.Fatal("firefox plugin not registered")
+	}
+	return p
+}
+
+// withExecDetachRecorder swaps execDetachRunner to capture argv.
+func withExecDetachRecorder(t *testing.T, calls *[]string) {
+	t.Helper()
+	orig := execDetachRunner
+	execDetachRunner = func(bin string, args []string) (int, error) {
+		argv := append([]string{bin}, args...)
+		*calls = append(*calls, strings.Join(argv, " "))
+		return 12345, nil
+	}
+	t.Cleanup(func() { execDetachRunner = orig })
+}
+
+// withFileExists swaps fileExistsFunc for the duration of the test.
+func withFileExists(t *testing.T, fn func(string) bool) {
+	t.Helper()
+	orig := fileExistsFunc
+	fileExistsFunc = fn
+	t.Cleanup(func() { fileExistsFunc = orig })
+}
+
+func TestFirefoxLua_UpRunsCreateThenLaunch(t *testing.T) {
+	// Pretend firefox is on PATH so resolve_binary takes the PATH branch.
+	withPathLookup(t, func(bin string) (string, error) {
+		if bin == "firefox" {
+			return "/usr/bin/firefox", nil
+		}
+		return "", errors.New("not found")
+	})
+
+	// Script the synchronous -CreateProfile call to return success.
+	s := &execScript{results: []execResult{{Code: 0}}}
+	withExecScript(t, s)
+
+	var detachCalls []string
+	withExecDetachRecorder(t, &detachCalls)
+
+	p := loadFirefoxLuaPlugin(t)
+	inst, err := p.New(plugins.ProjectEnv{Name: "liberties", Cwd: "/cwd"}, rawFromYAML(t, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := inst.Up(context.Background()); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+
+	if len(s.calls) != 1 {
+		t.Fatalf("exec calls = %d, want 1: %v", len(s.calls), s.calls)
+	}
+	if !strings.Contains(s.calls[0], "-CreateProfile") || !strings.Contains(s.calls[0], "liberties") {
+		t.Errorf("create call = %q, want -CreateProfile liberties", s.calls[0])
+	}
+	if len(detachCalls) != 1 {
+		t.Fatalf("detach calls = %d, want 1: %v", len(detachCalls), detachCalls)
+	}
+	launch := detachCalls[0]
+	if !strings.Contains(launch, "-P liberties") {
+		t.Errorf("launch missing -P liberties: %q", launch)
+	}
+	if !strings.Contains(launch, "--new-instance") {
+		t.Errorf("launch missing --new-instance: %q", launch)
+	}
+}
+
+func TestFirefoxLua_KillOnDownInvokesApplescript(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin-only: osascript not available on this platform")
+	}
+	var gotArgs []string
+	orig := execOsascript
+	execOsascript = func(args ...string) ([]byte, int, error) {
+		gotArgs = append([]string{}, args...)
+		return []byte(""), 0, nil
+	}
+	t.Cleanup(func() { execOsascript = orig })
+
+	p := loadFirefoxLuaPlugin(t)
+	inst, err := p.New(
+		plugins.ProjectEnv{Name: "liberties", Cwd: "/cwd"},
+		rawFromYAML(t, "kill_on_down: true\n"),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := inst.Down(context.Background()); err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+	if len(gotArgs) != 2 || gotArgs[0] != "-e" {
+		t.Fatalf("osascript argv = %v, want [-e <script>]", gotArgs)
+	}
+	if !strings.Contains(gotArgs[1], "liberties") {
+		t.Errorf("script missing profile name: %q", gotArgs[1])
+	}
+	if !strings.Contains(gotArgs[1], "Firefox") {
+		t.Errorf("script missing Firefox: %q", gotArgs[1])
+	}
+}
+
+func TestFirefoxLua_ValidateMissingBinary(t *testing.T) {
+	withPathLookup(t, func(string) (string, error) { return "", errors.New("not found") })
+	withFileExists(t, func(string) bool { return false })
+
+	p := loadFirefoxLuaPlugin(t)
+	inst, err := p.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, rawFromYAML(t, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	errs := inst.Validate()
+	if len(errs) == 0 {
+		t.Fatal("expected validation error")
+	}
+	hit := false
+	for _, e := range errs {
+		msg := e.Error()
+		if strings.Contains(msg, "firefox") && strings.Contains(msg, "binary") {
+			hit = true
+			break
+		}
+	}
+	if !hit {
+		t.Errorf("expected error mentioning firefox and binary, got %v", errs)
+	}
+}
+
+func TestFirefoxLua_DryRunReturnsBothArgvs(t *testing.T) {
+	withPathLookup(t, func(bin string) (string, error) {
+		if bin == "firefox" {
+			return "/usr/bin/firefox", nil
+		}
+		return "", errors.New("not found")
+	})
+
+	p := loadFirefoxLuaPlugin(t)
+	inst, err := p.New(
+		plugins.ProjectEnv{Name: "liberties", Cwd: "/cwd"},
+		rawFromYAML(t, "url: https://example.com\n"),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	argvs, err := inst.DryRun()
+	if err != nil {
+		t.Fatalf("DryRun: %v", err)
+	}
+	if len(argvs) != 2 {
+		t.Fatalf("rows = %d, want 2: %v", len(argvs), argvs)
+	}
+	create := strings.Join(argvs[0], " ")
+	launch := strings.Join(argvs[1], " ")
+	if !strings.Contains(create, "-CreateProfile") || !strings.Contains(create, "liberties") {
+		t.Errorf("create row = %q, want -CreateProfile + liberties", create)
+	}
+	if !strings.Contains(launch, "-P liberties") {
+		t.Errorf("launch row missing -P liberties: %q", launch)
+	}
+	if !strings.Contains(launch, "--new-instance") {
+		t.Errorf("launch row missing --new-instance: %q", launch)
+	}
+	if !strings.Contains(launch, "https://example.com") {
+		t.Errorf("launch row missing url: %q", launch)
+	}
+}
+
 // TestLua_PathLookupHandlesMissing verifies sesh.path_lookup returns nil on miss.
 func TestLua_PathLookupHandlesMissing(t *testing.T) {
 	src := `

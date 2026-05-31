@@ -124,6 +124,14 @@ func stubDiscoverNames(src []byte) ([]string, error) {
 	L.SetField(logTbl, "warn", noop)
 	L.SetField(logTbl, "error", noop)
 	L.SetField(sesh, "log", logTbl)
+	// Stub file_exists so plugins that call it at top level (e.g., to pick
+	// a fallback path before sesh.register) don't crash discovery. Returns
+	// false; the real API runs during construction.
+	L.SetField(sesh, "file_exists", L.NewFunction(func(L *lua.LState) int {
+		_ = L.CheckString(1)
+		L.Push(lua.LFalse)
+		return 1
+	}))
 	L.SetGlobal("sesh", sesh)
 
 	if err := L.DoString(string(src)); err != nil {

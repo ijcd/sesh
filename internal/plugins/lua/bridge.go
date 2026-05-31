@@ -37,10 +37,11 @@ func registerSeshAPI(L *lua.LState) {
 	// into the registry field on the user-data slot we stash below.
 	L.SetField(sesh, "register", L.NewFunction(luaRegister))
 
-	// sesh.exec / exec_detach / path_lookup
+	// sesh.exec / exec_detach / path_lookup / file_exists
 	L.SetField(sesh, "exec", L.NewFunction(luaExec))
 	L.SetField(sesh, "exec_detach", L.NewFunction(luaExecDetach))
 	L.SetField(sesh, "path_lookup", L.NewFunction(luaPathLookup))
+	L.SetField(sesh, "file_exists", L.NewFunction(luaFileExists))
 
 	// sesh.wait_for
 	L.SetField(sesh, "wait_for", L.NewFunction(luaWaitFor))
