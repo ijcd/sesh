@@ -2,6 +2,7 @@ package lua
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -199,7 +200,8 @@ func TestLua_EmbeddedEmacsDryRun(t *testing.T) {
 	if len(argvs) == 0 {
 		t.Fatalf("DryRun returned no rows")
 	}
-	argv := argvs[0]
+	// Open-dispatch is the last row in the 3-row probe/spawn/open sequence.
+	argv := argvs[len(argvs)-1]
 	if len(argv) != 4 {
 		t.Fatalf("argv len = %d, want 4: %v", len(argv), argv)
 	}
@@ -238,7 +240,8 @@ func TestLua_EmbeddedEmacsDryRunWithConfigOverrides(t *testing.T) {
 	if len(argvs) == 0 {
 		t.Fatalf("DryRun returned no rows")
 	}
-	argv := argvs[0]
+	// Open-dispatch is the last row in the 3-row probe/spawn/open sequence.
+	argv := argvs[len(argvs)-1]
 	if argv[1] != "--socket-name=prj" {
 		t.Errorf("argv[1] = %q, want --socket-name=prj", argv[1])
 	}
@@ -385,6 +388,300 @@ sesh.register("asrun", {
 	}
 	if !strings.Contains(gotArgs[1], "Firefox") {
 		t.Errorf("argv[1] = %q, want containing 'Firefox'", gotArgs[1])
+	}
+}
+
+// --- Emacs Lua-port test ladder ---------------------------------------
+//
+// Mirrors the v0.4 Go emacs test coverage (internal/plugins/emacs/emacs_test.go)
+// against the Lua-loaded plugin. All tests use the execRunner / pathLookup
+// seams to script responses without spawning real emacs. Names track the
+// Go tests with an EmacsLua_ prefix for grep parity.
+
+// loadEmacsLuaPlugin loads the embedded emacs.lua and returns its plugin.
+func loadEmacsLuaPlugin(t *testing.T) plugins.Plugin {
+	t.Helper()
+	reg := plugins.NewRegistry()
+	if _, err := LoadAll(reg.Register); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	p, ok := reg.Get("emacs-lua")
+	if !ok {
+		t.Fatal("emacs-lua plugin not registered")
+	}
+	return p
+}
+
+// execScript is a recording, scripted execRunner. results are consumed
+// in order; once exhausted, returns success (code 0). All calls land in
+// calls as joined "bin arg arg" strings for assertion.
+type execScript struct {
+	calls   []string
+	results []execResult
+}
+
+func (e *execScript) run(bin string, args []string) execResult {
+	argv := append([]string{bin}, args...)
+	e.calls = append(e.calls, strings.Join(argv, " "))
+	if len(e.results) > 0 {
+		r := e.results[0]
+		e.results = e.results[1:]
+		return r
+	}
+	return execResult{Code: 0}
+}
+
+// withExecScript swaps execRunner for the duration of the test.
+func withExecScript(t *testing.T, s *execScript) {
+	t.Helper()
+	orig := execRunner
+	execRunner = s.run
+	t.Cleanup(func() { execRunner = orig })
+}
+
+// withPathLookup swaps pathLookup for the duration of the test.
+func withPathLookup(t *testing.T, fn func(string) (string, error)) {
+	t.Helper()
+	orig := pathLookup
+	pathLookup = fn
+	t.Cleanup(func() { pathLookup = orig })
+}
+
+func TestEmacsLua_PluginNameIsEmacs(t *testing.T) {
+	p := loadEmacsLuaPlugin(t)
+	if got := p.Name(); got != "emacs-lua" {
+		t.Errorf("Name = %q, want %q", got, "emacs-lua")
+	}
+}
+
+func TestEmacsLua_NewAppliesConventionDefaults(t *testing.T) {
+	p := loadEmacsLuaPlugin(t)
+	inst, err := p.New(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"}, rawFromYAML(t, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	argvs, err := inst.DryRun()
+	if err != nil {
+		t.Fatalf("DryRun: %v", err)
+	}
+	if len(argvs) != 3 {
+		t.Fatalf("DryRun rows = %d, want 3: %v", len(argvs), argvs)
+	}
+	// probe + open both use --socket-name=sesh; spawn uses --daemon=sesh
+	probe := strings.Join(argvs[0], " ")
+	spawn := strings.Join(argvs[1], " ")
+	open := strings.Join(argvs[2], " ")
+	if !strings.Contains(probe, "--socket-name=sesh") {
+		t.Errorf("probe missing default daemon: %q", probe)
+	}
+	if !strings.Contains(spawn, "--daemon=sesh") {
+		t.Errorf("spawn missing default daemon: %q", spawn)
+	}
+	if !strings.Contains(open, `(sesh-open-project "lib" "/cwd")`) {
+		t.Errorf("open form missing default hook: %q", open)
+	}
+}
+
+func TestEmacsLua_NewRespectsConfigOverrides(t *testing.T) {
+	p := loadEmacsLuaPlugin(t)
+	src := "hook: my-open\nclose_hook: my-close\ndaemon: prj\nfiles:\n  - README.md\n  - /abs/path.txt\n"
+	inst, err := p.New(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"}, rawFromYAML(t, src))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	argvs, err := inst.DryRun()
+	if err != nil {
+		t.Fatalf("DryRun: %v", err)
+	}
+	if len(argvs) != 3 {
+		t.Fatalf("DryRun rows = %d, want 3: %v", len(argvs), argvs)
+	}
+	probe := strings.Join(argvs[0], " ")
+	spawn := strings.Join(argvs[1], " ")
+	open := strings.Join(argvs[2], " ")
+	if !strings.Contains(probe, "--socket-name=prj") {
+		t.Errorf("probe missing override daemon: %q", probe)
+	}
+	if !strings.Contains(spawn, "--daemon=prj") {
+		t.Errorf("spawn missing override daemon: %q", spawn)
+	}
+	if !strings.Contains(open, "(my-open ") {
+		t.Errorf("open missing custom hook: %q", open)
+	}
+	if !strings.Contains(open, `"/cwd/README.md"`) {
+		t.Errorf("open missing absolutized README: %q", open)
+	}
+	if !strings.Contains(open, `"/abs/path.txt"`) {
+		t.Errorf("open missing absolute path: %q", open)
+	}
+}
+
+func TestEmacsLua_DryRunIncludesProbeSpawnAndOpenArgv(t *testing.T) {
+	p := loadEmacsLuaPlugin(t)
+	inst, err := p.New(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"}, rawFromYAML(t, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	argvs, err := inst.DryRun()
+	if err != nil {
+		t.Fatalf("DryRun: %v", err)
+	}
+	if len(argvs) != 3 {
+		t.Fatalf("rows = %d, want 3: %v", len(argvs), argvs)
+	}
+	// 0: probe — emacsclient --socket-name=... -e (emacs-version)
+	probe := argvs[0]
+	if probe[0] != "emacsclient" {
+		t.Errorf("probe[0] = %q, want emacsclient", probe[0])
+	}
+	if !strings.Contains(strings.Join(probe, " "), "--socket-name=") {
+		t.Errorf("probe missing --socket-name=: %v", probe)
+	}
+	if probe[len(probe)-1] != "(emacs-version)" {
+		t.Errorf("probe form = %q, want (emacs-version)", probe[len(probe)-1])
+	}
+	// 1: spawn — emacs --daemon=...
+	spawn := argvs[1]
+	if spawn[0] != "emacs" {
+		t.Errorf("spawn[0] = %q, want emacs", spawn[0])
+	}
+	if !strings.HasPrefix(spawn[1], "--daemon=") {
+		t.Errorf("spawn[1] = %q, want --daemon=...", spawn[1])
+	}
+	// 2: open dispatch — emacsclient ... (sesh-open-project ...)
+	open := argvs[2]
+	if open[0] != "emacsclient" {
+		t.Errorf("open[0] = %q, want emacsclient", open[0])
+	}
+	if !strings.Contains(strings.Join(open, " "), "(sesh-open-project ") {
+		t.Errorf("open missing hook call: %v", open)
+	}
+}
+
+func TestEmacsLua_UpInvokesEmacsclientWithOpenFormHealthyDaemon(t *testing.T) {
+	s := &execScript{
+		// 0: probe succeeds → no daemon spawn
+		// 1: open dispatch succeeds
+		results: []execResult{
+			{Code: 0}, // probe
+			{Code: 0}, // open
+		},
+	}
+	withExecScript(t, s)
+
+	p := loadEmacsLuaPlugin(t)
+	inst, err := p.New(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"}, rawFromYAML(t, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := inst.Up(context.Background()); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if len(s.calls) != 2 {
+		t.Fatalf("expected 2 exec calls, got %d: %v", len(s.calls), s.calls)
+	}
+	if !strings.Contains(s.calls[0], "emacsclient") || !strings.Contains(s.calls[0], "(emacs-version)") {
+		t.Errorf("call[0] not probe: %q", s.calls[0])
+	}
+	if !strings.Contains(s.calls[1], "emacsclient") || !strings.Contains(s.calls[1], "(sesh-open-project \"lib\" \"/cwd\")") {
+		t.Errorf("call[1] not open dispatch: %q", s.calls[1])
+	}
+	// Defensive: no daemon spawn on healthy-daemon path.
+	for _, c := range s.calls {
+		if strings.Contains(c, "--daemon=") {
+			t.Errorf("unexpected daemon spawn: %q", c)
+		}
+	}
+}
+
+func TestEmacsLua_UpSpawnsDaemonOnProbeFail(t *testing.T) {
+	s := &execScript{
+		// 0: probe fails → spawn daemon
+		// 1: emacs --daemon=sesh succeeds
+		// 2: post-spawn probe (via wait_for) succeeds
+		// 3: open dispatch succeeds
+		results: []execResult{
+			{Code: 1, Stderr: "can't find socket"},
+			{Code: 0},
+			{Code: 0},
+			{Code: 0},
+		},
+	}
+	withExecScript(t, s)
+
+	p := loadEmacsLuaPlugin(t)
+	inst, err := p.New(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"}, rawFromYAML(t, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := inst.Up(context.Background()); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if len(s.calls) < 3 {
+		t.Fatalf("expected >=3 exec calls, got %d: %v", len(s.calls), s.calls)
+	}
+	foundSpawn, foundOpen := false, false
+	for _, c := range s.calls {
+		if strings.Contains(c, "emacs --daemon=sesh") {
+			foundSpawn = true
+		}
+		if strings.Contains(c, "(sesh-open-project \"lib\" \"/cwd\")") {
+			foundOpen = true
+		}
+	}
+	if !foundSpawn {
+		t.Errorf("expected emacs --daemon=sesh spawn in calls: %v", s.calls)
+	}
+	if !foundOpen {
+		t.Errorf("expected open dispatch in calls: %v", s.calls)
+	}
+}
+
+func TestEmacsLua_DownIdempotentNoSession(t *testing.T) {
+	s := &execScript{
+		// Close dispatch fails — Down must still return nil (best-effort).
+		results: []execResult{
+			{Code: 1, Stderr: "nope"},
+		},
+	}
+	withExecScript(t, s)
+
+	p := loadEmacsLuaPlugin(t)
+	inst, err := p.New(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"}, rawFromYAML(t, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := inst.Down(context.Background()); err != nil {
+		t.Errorf("Down returned error (best-effort contract): %v", err)
+	}
+	if len(s.calls) != 1 {
+		t.Errorf("expected 1 close call, got %d: %v", len(s.calls), s.calls)
+	}
+}
+
+func TestEmacsLua_ValidateMissingEmacsclient(t *testing.T) {
+	withPathLookup(t, func(bin string) (string, error) {
+		return "", errors.New("not found")
+	})
+
+	p := loadEmacsLuaPlugin(t)
+	inst, err := p.New(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"}, rawFromYAML(t, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	errs := inst.Validate()
+	if len(errs) == 0 {
+		t.Fatal("expected validation error")
+	}
+	hit := false
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "emacsclient") {
+			hit = true
+			break
+		}
+	}
+	if !hit {
+		t.Errorf("expected error mentioning emacsclient, got %v", errs)
 	}
 }
 

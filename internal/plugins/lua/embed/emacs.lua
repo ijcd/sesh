@@ -110,9 +110,15 @@ sesh.register("emacs-lua", {
 
   dry_run = function(env, cfg)
     local c = defaults(cfg)
+    local socket = "--socket-name=" .. c.daemon
     local form = build_open_form(c.hook, env.name, env.cwd, c.files)
+    -- Mirror what `up` does: probe, then (potentially) spawn daemon, then
+    -- dispatch. The spawn line is always shown — users see all the commands
+    -- `up` might run, in order.
     return {
-      { "emacsclient", "--socket-name=" .. c.daemon, "-e", form },
+      { "emacsclient", socket, "-e", "(emacs-version)" },
+      { "emacs", "--daemon=" .. c.daemon },
+      { "emacsclient", socket, "-e", form },
     }
   end,
 })
