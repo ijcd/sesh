@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -20,8 +21,11 @@ func newRootCmd() *cobra.Command {
 	// Lua plugin bridge. Registers embedded plugins (emacs, firefox) plus
 	// any ~/.config/sesh/plugins/*.lua. The Go emacs package was removed in
 	// v0.5; the Lua "emacs" plugin is now the sole emacs implementation.
+	// A broken user plugin must NOT kill tier-1 commands (`sesh ls`, `edit`,
+	// `init`, etc.); warn-and-continue, matching engine.Up's pattern for
+	// optional plugin failures (internal/engine/up.go).
 	if _, err := luaplug.LoadAll(e.RegisterPlugin); err != nil {
-		panic(fmt.Errorf("sesh: load lua plugins: %w", err))
+		fmt.Fprintf(os.Stderr, "sesh: warning: lua plugin load failed: %v\n", err)
 	}
 
 	cmd := &cobra.Command{
