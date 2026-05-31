@@ -26,18 +26,6 @@ type LuaPlugin struct {
 // Name reports the plugin's registry key.
 func (p *LuaPlugin) Name() string { return p.name }
 
-// Close releases the underlying LState. Not currently wired into engine
-// teardown — present for future lifecycle work and tests that want to
-// release resources eagerly.
-func (p *LuaPlugin) Close() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.L != nil {
-		p.L.Close()
-		p.L = nil
-	}
-}
-
 // New decodes cfg into a Lua table, builds the env table, and returns a
 // LuaInstance bound to both. The instance reuses p.L; serializing access
 // is handled by p.mu inside each Instance method.

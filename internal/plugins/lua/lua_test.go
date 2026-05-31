@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -345,6 +346,9 @@ sesh.register("wfbad", {
 // TestApplescript_DispatchesViaOsascript verifies sesh.applescript invokes
 // osascript -e <script> via the test seam. Skips on non-darwin platforms.
 func TestApplescript_DispatchesViaOsascript(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin-only: osascript not available on this platform")
+	}
 	var gotArgs []string
 	orig := execOsascript
 	execOsascript = func(args ...string) ([]byte, int, error) {
