@@ -393,10 +393,11 @@ sesh.register("asrun", {
 
 // --- Emacs Lua-port test ladder ---------------------------------------
 //
-// Mirrors the v0.4 Go emacs test coverage (internal/plugins/emacs/emacs_test.go)
-// against the Lua-loaded plugin. All tests use the execRunner / pathLookup
-// seams to script responses without spawning real emacs. Names track the
-// Go tests with an EmacsLua_ prefix for grep parity.
+// Mirrors the test coverage we had on the v0.4 Go emacs plugin (now
+// removed in favor of this Lua port) against the Lua-loaded plugin. All
+// tests use the execRunner / pathLookup seams to script responses without
+// spawning real emacs. Names track the original Go tests with an
+// EmacsLua_ prefix for grep parity.
 
 // loadEmacsLuaPlugin loads the embedded emacs.lua and returns its plugin.
 func loadEmacsLuaPlugin(t *testing.T) plugins.Plugin {
