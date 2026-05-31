@@ -91,7 +91,10 @@ func (e *Engine) Up(ctx context.Context, p *spec.Project, force bool) error {
 
 	type upAction int
 	const (
-		actionAttachExisting upAction = iota
+		// actionNoop: session already exists and no force flag. engine.Up
+		// does nothing here; the cmd layer handles attach separately
+		// (cmd/sesh/runProject → attachToTmux).
+		actionNoop upAction = iota
 		actionRecreate
 		actionFreshUp
 	)
@@ -99,14 +102,15 @@ func (e *Engine) Up(ctx context.Context, p *spec.Project, force bool) error {
 	action := actionFreshUp
 	switch {
 	case status == drivers.StatusExists && !force:
-		action = actionAttachExisting
+		action = actionNoop
 	case status == drivers.StatusExists && force:
 		action = actionRecreate
 	}
 
 	switch action {
-	case actionAttachExisting:
-		// Attach silently — session already exists; driver handles attach in its Up happy-path.
+	case actionNoop:
+		// Session exists and no force: engine does nothing. Attach (if any)
+		// is the cmd layer's job — see cmd/sesh/runProject.
 	case actionRecreate:
 		if err := d.Down(ctx, pp.Name); err != nil {
 			return fmt.Errorf("force down: %w", err)
