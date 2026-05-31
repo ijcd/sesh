@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/ijcd/sesh/internal/plugins"
@@ -184,42 +185,31 @@ func (i *LuaInstance) callWithCtx(ctx context.Context, fnName string) error {
 	return fmt.Errorf("lua plugin %q: %s: unexpected return %s", i.plugin.name, fnName, ret.Type())
 }
 
-// goToLuaTable converts a Go value (typically the YAML-decoded map) to
-// a Lua table. Handles map[string]any, []any, primitives. Anything
-// else is converted via fmt.Sprintf("%v"). Mirrors what a small
-// json.Marshal-style converter would do.
+// goToLuaTable is the entry point used by Plugin.New for the apps-block
+// config root. Always returns a table: maps/slices flow through goToLua
+// directly; top-level scalars get wrapped as { value = scalar } so the
+// plugin can still index it. Shouldn't normally happen for apps-block
+// config, but defended for shape stability.
 func goToLuaTable(L *lua.LState, v any) *lua.LTable {
-	tbl := L.NewTable()
 	if v == nil {
-		return tbl
+		return L.NewTable()
 	}
-	switch x := v.(type) {
-	case map[string]any:
-		for k, val := range x {
-			L.SetField(tbl, k, goToLua(L, val))
-		}
-	case map[any]any:
-		// goccy/go-yaml may yield this for non-string keys; coerce keys.
-		for k, val := range x {
-			L.SetField(tbl, fmt.Sprintf("%v", k), goToLua(L, val))
-		}
-	case []any:
-		for i, val := range x {
-			tbl.RawSetInt(i+1, goToLua(L, val))
-		}
-	default:
-		// Scalar at top level — wrap as { value = scalar } so the plugin
-		// can still index it. Shouldn't normally happen for apps-block
-		// config.
-		L.SetField(tbl, "value", goToLua(L, x))
+	if lv := goToLua(L, v); lv.Type() == lua.LTTable {
+		return lv.(*lua.LTable)
 	}
+	tbl := L.NewTable()
+	L.SetField(tbl, "value", goToLua(L, v))
 	return tbl
 }
 
+// goToLua is the single recursive dispatcher: handles nil, scalars,
+// every stdlib numeric, []any, map[string]any, map[any]any. Anything
+// else logs a warning to stderr and coerces via fmt.Sprintf("%v").
+//
+// Note: lua.LNumber is float64 underneath; uint64 values exceeding
+// 2^53 lose precision. That's an inherent Lua limitation; we cover
+// every stdlib numeric type but the precision ceiling is unavoidable.
 func goToLua(L *lua.LState, v any) lua.LValue {
-	// Note: lua.LNumber is float64 underneath; uint64 values exceeding
-	// 2^53 lose precision. That's an inherent Lua limitation; we cover
-	// every stdlib numeric type but the precision ceiling is unavoidable.
 	switch x := v.(type) {
 	case nil:
 		return lua.LNil
@@ -258,10 +248,20 @@ func goToLua(L *lua.LState, v any) lua.LValue {
 		}
 		return t
 	case map[string]any:
-		return goToLuaTable(L, x)
+		t := L.NewTable()
+		for k, val := range x {
+			L.SetField(t, k, goToLua(L, val))
+		}
+		return t
 	case map[any]any:
-		return goToLuaTable(L, x)
+		// goccy/go-yaml may yield this for non-string keys; coerce keys.
+		t := L.NewTable()
+		for k, val := range x {
+			L.SetField(t, fmt.Sprintf("%v", k), goToLua(L, val))
+		}
+		return t
 	default:
+		fmt.Fprintf(os.Stderr, "sesh: warning: goToLua: unknown type %T coerced to string\n", x)
 		return lua.LString(fmt.Sprintf("%v", x))
 	}
 }

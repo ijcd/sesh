@@ -1147,3 +1147,100 @@ func TestBridge_GoToLuaHandlesAllNumericTypes(t *testing.T) {
 		})
 	}
 }
+
+// TestGoToLua_UnknownTypeWarnsAndCoerces verifies that goToLua emits a
+// stderr warning when handed a type outside the supported set (structs,
+// channels, funcs, custom types) and still falls back to a string so
+// config decoding doesn't crash mid-flight.
+func TestGoToLua_UnknownTypeWarnsAndCoerces(t *testing.T) {
+	L := lua.NewState()
+	defer L.Close()
+
+	type weirdStruct struct{ A int }
+
+	// Swap os.Stderr to a pipe, restore on cleanup.
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = origStderr })
+
+	got := goToLua(L, weirdStruct{A: 7})
+
+	// Close writer so the reader sees EOF.
+	w.Close()
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	stderr := string(buf[:n])
+
+	if _, ok := got.(lua.LString); !ok {
+		t.Fatalf("goToLua(struct) type = %s, want LString", got.Type())
+	}
+	if !strings.Contains(stderr, "sesh: warning: goToLua: unknown type") {
+		t.Errorf("stderr missing warning prefix; got %q", stderr)
+	}
+	if !strings.Contains(stderr, "lua.weirdStruct") {
+		t.Errorf("stderr missing offending type name; got %q", stderr)
+	}
+}
+
+// TestExecDetach_NonZeroExitLogs verifies the detach reaper goroutine
+// surfaces non-zero exits to stderr instead of silently swallowing them.
+// Without this signal, a Firefox that crashes immediately after launch
+// would leave sesh's Up returning success with no user-visible diagnostic.
+func TestExecDetach_NonZeroExitLogs(t *testing.T) {
+	if _, err := osexec.LookPath("sh"); err != nil {
+		t.Skip("sh not on PATH")
+	}
+
+	// Swap os.Stderr to a pipe.
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = origStderr })
+
+	pid, err := execDetachRunner(context.Background(), "sh", []string{"-c", "exit 7"})
+	if err != nil {
+		t.Fatalf("execDetachRunner: %v", err)
+	}
+	if pid <= 0 {
+		t.Fatalf("pid = %d, want > 0", pid)
+	}
+
+	// Drain stderr in a goroutine so the writer can be closed once the
+	// reaper has fired. Wait for sh to exit + reaper to emit, then close.
+	type readResult struct {
+		out string
+		err error
+	}
+	done := make(chan readResult, 1)
+	go func() {
+		buf := make([]byte, 4096)
+		n, err := r.Read(buf)
+		done <- readResult{out: string(buf[:n]), err: err}
+	}()
+
+	// Give the reaper goroutine time to observe sh's exit and write.
+	time.Sleep(300 * time.Millisecond)
+	w.Close()
+
+	var stderr string
+	select {
+	case rr := <-done:
+		stderr = rr.out
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out reading stderr")
+	}
+
+	if !strings.Contains(stderr, "sesh: detached sh") {
+		t.Errorf("stderr missing detach warning; got %q", stderr)
+	}
+	if !strings.Contains(stderr, "exited with error") {
+		t.Errorf("stderr missing 'exited with error'; got %q", stderr)
+	}
+}
