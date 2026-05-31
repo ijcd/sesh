@@ -75,10 +75,14 @@ sesh.register("sentinel", {
 		t.Errorf("Validate with path = empty errors, got %v", errs)
 	}
 
-	argv, err := inst.DryRun()
+	argvs, err := inst.DryRun()
 	if err != nil {
 		t.Fatalf("DryRun: %v", err)
 	}
+	if len(argvs) != 1 {
+		t.Fatalf("DryRun rows = %d, want 1: %v", len(argvs), argvs)
+	}
+	argv := argvs[0]
 	if len(argv) != 2 || argv[0] != "touch" || argv[1] != sentinel {
 		t.Errorf("DryRun = %v, want [touch %s]", argv, sentinel)
 	}
@@ -186,10 +190,14 @@ func TestLua_EmbeddedEmacsDryRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	argv, err := inst.DryRun()
+	argvs, err := inst.DryRun()
 	if err != nil {
 		t.Fatalf("DryRun: %v", err)
 	}
+	if len(argvs) == 0 {
+		t.Fatalf("DryRun returned no rows")
+	}
+	argv := argvs[0]
 	if len(argv) != 4 {
 		t.Fatalf("argv len = %d, want 4: %v", len(argv), argv)
 	}
@@ -221,10 +229,14 @@ func TestLua_EmbeddedEmacsDryRunWithConfigOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	argv, err := inst.DryRun()
+	argvs, err := inst.DryRun()
 	if err != nil {
 		t.Fatalf("DryRun: %v", err)
 	}
+	if len(argvs) == 0 {
+		t.Fatalf("DryRun returned no rows")
+	}
+	argv := argvs[0]
 	if argv[1] != "--socket-name=prj" {
 		t.Errorf("argv[1] = %q, want --socket-name=prj", argv[1])
 	}

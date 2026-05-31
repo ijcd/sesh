@@ -199,10 +199,12 @@ func (i *instance) Validate() []error {
 
 // DryRun returns the argv `sesh up` would dispatch on a daemon-already-up
 // path. The daemon-spawn fallback is not previewed: DryRun is a static
-// snapshot, not a state-machine trace.
-func (i *instance) DryRun() ([]string, error) {
+// snapshot, not a state-machine trace. Wrapped as a single-row [][]string
+// per the v0.5 SPI (one argv per shell call); this plugin only previews
+// the open dispatch.
+func (i *instance) DryRun() ([][]string, error) {
 	form := BuildOpenForm(i.hook, i.env.Name, i.env.Cwd, i.files)
-	return []string{"emacsclient", "--socket-name=" + i.daemon, "-e", form}, nil
+	return [][]string{{"emacsclient", "--socket-name=" + i.daemon, "-e", form}}, nil
 }
 
 // Compile-time assertions.

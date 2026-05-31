@@ -228,10 +228,14 @@ func TestEmacs_DryRunReturnsEmacsclientArgv(t *testing.T) {
 	fr := &fakeRunner{}
 	inst := newInstanceWith(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"},
 		"sesh-open-project", "sesh-close-project", "sesh", nil, fr)
-	argv, err := inst.DryRun()
+	argvs, err := inst.DryRun()
 	if err != nil {
 		t.Fatalf("DryRun: %v", err)
 	}
+	if len(argvs) != 1 {
+		t.Fatalf("expected 1 argv row, got %d: %v", len(argvs), argvs)
+	}
+	argv := argvs[0]
 	if len(argv) != 4 {
 		t.Fatalf("expected argv of length 4, got %d: %v", len(argv), argv)
 	}

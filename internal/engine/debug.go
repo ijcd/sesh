@@ -42,13 +42,15 @@ func (e *Engine) Debug(ctx context.Context, p *spec.Project, commandsOnly bool, 
 			cmds = append(cmds, fmt.Sprintf("# apps[%d] %s: New failed: %v", i, app.Plugin, perr))
 			continue
 		}
-		argv, drerr := inst.DryRun()
+		argvs, drerr := inst.DryRun()
 		if drerr != nil {
 			cmds = append(cmds, fmt.Sprintf("# apps[%d] %s: DryRun failed: %v", i, app.Plugin, drerr))
 			continue
 		}
 		cmds = append(cmds, fmt.Sprintf("# apps[%d] %s", i, app.Plugin))
-		cmds = append(cmds, strings.Join(argv, " "))
+		for _, line := range argvs {
+			cmds = append(cmds, strings.Join(line, " "))
+		}
 	}
 
 	if !commandsOnly {

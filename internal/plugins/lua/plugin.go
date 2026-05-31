@@ -117,12 +117,11 @@ func (i *LuaInstance) Validate() []error {
 }
 
 // DryRun calls the Lua-side dry_run(env, cfg). Convention: returns a
-// table of argv tables: { {"bin","a","b"}, {"bin2","a"}, ... }.
-// To fit the existing plugins.Instance.DryRun() ([]string, error)
-// signature (which is a SINGLE argv), the spike flattens the first
-// returned argv tuple. This mismatch is a load-bearing finding — see
-// SPIKE-NOTES.
-func (i *LuaInstance) DryRun() ([]string, error) {
+// table of argv tables: { {"bin","a","b"}, {"bin2","a"}, ... }. Each
+// inner table is one shell call the plugin would invoke; the outer
+// order matches Up's call sequence. An empty outer table yields a
+// non-nil empty [][]string{} (no rows to print).
+func (i *LuaInstance) DryRun() ([][]string, error) {
 	i.plugin.mu.Lock()
 	defer i.plugin.mu.Unlock()
 
@@ -146,15 +145,17 @@ func (i *LuaInstance) DryRun() ([]string, error) {
 	if !ok || tbl == nil {
 		return nil, nil
 	}
-	// Take first row (argv); future API might return all rows.
-	if tbl.Len() == 0 {
-		return nil, nil
+	n := tbl.Len()
+	rows := make([][]string, 0, n)
+	for k := 1; k <= n; k++ {
+		v := tbl.RawGetInt(k)
+		row, ok := v.(*lua.LTable)
+		if !ok {
+			return nil, fmt.Errorf("lua plugin %q: dry_run row %d is %s, not table", i.plugin.name, k, v.Type())
+		}
+		rows = append(rows, lvalueToStringSlice(row))
 	}
-	firstRow, ok := tbl.RawGetInt(1).(*lua.LTable)
-	if !ok {
-		return nil, fmt.Errorf("lua plugin %q: dry_run row 1 is %s, not table", i.plugin.name, tbl.RawGetInt(1).Type())
-	}
-	return lvalueToStringSlice(firstRow), nil
+	return rows, nil
 }
 
 // call is the shared Up/Down implementation. Lua convention: return
