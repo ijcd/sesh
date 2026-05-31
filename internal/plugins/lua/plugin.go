@@ -209,6 +209,9 @@ func goToLuaTable(L *lua.LState, v any) *lua.LTable {
 }
 
 func goToLua(L *lua.LState, v any) lua.LValue {
+	// Note: lua.LNumber is float64 underneath; uint64 values exceeding
+	// 2^53 lose precision. That's an inherent Lua limitation; we cover
+	// every stdlib numeric type but the precision ceiling is unavoidable.
 	switch x := v.(type) {
 	case nil:
 		return lua.LNil
@@ -218,7 +221,25 @@ func goToLua(L *lua.LState, v any) lua.LValue {
 		return lua.LString(x)
 	case int:
 		return lua.LNumber(x)
+	case int8:
+		return lua.LNumber(x)
+	case int16:
+		return lua.LNumber(x)
+	case int32:
+		return lua.LNumber(x)
 	case int64:
+		return lua.LNumber(x)
+	case uint:
+		return lua.LNumber(x)
+	case uint8:
+		return lua.LNumber(x)
+	case uint16:
+		return lua.LNumber(x)
+	case uint32:
+		return lua.LNumber(x)
+	case uint64:
+		return lua.LNumber(x)
+	case float32:
 		return lua.LNumber(x)
 	case float64:
 		return lua.LNumber(x)

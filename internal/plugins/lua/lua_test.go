@@ -12,6 +12,7 @@ import (
 
 	"github.com/goccy/go-yaml/parser"
 	"github.com/ijcd/sesh/internal/plugins"
+	lua "github.com/yuin/gopher-lua"
 )
 
 // rawFromYAML builds a plugins.RawConfig from a YAML source string.
@@ -890,5 +891,45 @@ sesh.register("p", {
 	inst, _ := p.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
 	if err := inst.Up(context.Background()); err != nil {
 		t.Errorf("Up: %v", err)
+	}
+}
+
+// TestBridge_GoToLuaHandlesAllNumericTypes asserts every stdlib integer
+// and float type round-trips as lua.LNumber, not lua.LString. The default
+// fmt.Sprintf("%v") fallback would silently coerce uint*/int8/int16/int32/
+// float32 to strings, which breaks plugins that use them as numbers (e.g.
+// arithmetic, indexing).
+func TestBridge_GoToLuaHandlesAllNumericTypes(t *testing.T) {
+	L := lua.NewState()
+	defer L.Close()
+
+	cases := []struct {
+		name string
+		in   any
+		want lua.LNumber
+	}{
+		{"int", int(42), 42},
+		{"int8", int8(-8), -8},
+		{"int16", int16(-16), -16},
+		{"int32", int32(-32), -32},
+		{"int64", int64(-64), -64},
+		{"uint", uint(7), 7},
+		{"uint8", uint8(8), 8},
+		{"uint16", uint16(16), 16},
+		{"uint32", uint32(32), 32},
+		{"uint64", uint64(64), 64},
+		{"float32", float32(1.5), 1.5},
+		{"float64", float64(2.5), 2.5},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := goToLua(L, tc.in)
+			if got.Type() != lua.LTNumber {
+				t.Fatalf("goToLua(%T) type = %s, want LTNumber (value=%v)", tc.in, got.Type(), got)
+			}
+			if n, ok := got.(lua.LNumber); !ok || n != tc.want {
+				t.Errorf("goToLua(%T)=%v, want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }
