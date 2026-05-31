@@ -74,14 +74,27 @@ func TestValidate_DriverMustBeRegistered(t *testing.T) {
 	}
 }
 
-func TestValidate_DefaultsDriverWhenEmpty(t *testing.T) {
+func TestValidate_DoesNotMutateDriverField(t *testing.T) {
+	// Validate is pure — driver defaulting belongs to applyGlobalDefaults
+	// (which runs earlier in the pipeline). Bare project with empty Driver
+	// must surface as an unregistered-driver error, not be silently filled.
 	p := &spec.Project{Tabs: []spec.Tab{{Title: "shell"}}}
 	errs := Validate(p, []string{"tmux"})
-	if len(errs) > 0 {
-		t.Errorf("empty driver should default to tmux, got %v", errs)
+	if p.Driver != "" {
+		t.Errorf("Validate mutated Driver: got %q, want unchanged \"\"", p.Driver)
 	}
+	if len(errs) == 0 {
+		t.Fatal("expected unregistered-driver error for empty Driver, got none")
+	}
+}
+
+func TestApplyGlobalDefaults_DriverFallbackToTmux(t *testing.T) {
+	// applyGlobalDefaults owns the hardcoded fallback when neither project
+	// nor global config sets a driver.
+	p := &spec.Project{Tabs: []spec.Tab{{Title: "shell"}}}
+	applyGlobalDefaults(p, &Global{})
 	if p.Driver != "tmux" {
-		t.Errorf("driver not defaulted, got %q", p.Driver)
+		t.Errorf("applyGlobalDefaults: Driver = %q, want tmux", p.Driver)
 	}
 }
 

@@ -51,9 +51,15 @@ func LoadFromPath(path string, registeredDrivers []string, envOverride map[strin
 
 // applyGlobalDefaults fills empty scalar/map fields on p with values from g.
 // Lists are never touched (per design: lists belong in templates).
+//
+// Driver fallback order: project → global → hardcoded "tmux". Keeping the
+// hardcoded fallback here lets Validate stay pure (read-only).
 func applyGlobalDefaults(p *spec.Project, g *Global) {
 	if p.Driver == "" {
 		p.Driver = g.Driver
+	}
+	if p.Driver == "" {
+		p.Driver = "tmux"
 	}
 	if p.Attach == nil && g.Attach != nil {
 		p.Attach = g.Attach
