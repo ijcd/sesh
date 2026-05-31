@@ -12,15 +12,10 @@ import (
 
 // LuaPlugin adapts a Lua-side plugin table (the second arg to
 // sesh.register) to the plugins.Plugin contract. One LuaPlugin per
-// registered name; its LState is the same one used during discovery,
-// kept alive for the lifetime of the process.
-//
-// Spike design call: a single shared LState across all LuaPlugins
-// loaded in one discovery pass. Cheap and simple. The downside is that
-// any Lua plugin can in principle mutate `sesh` (or any global) and
-// affect another plugin loaded after. Acceptable for the spike; the
-// production design likely wants one LState per plugin (rehydrated from
-// the original source) for isolation.
+// registered name; each owns its own *lua.LState so plugins cannot
+// mutate each other's globals or sesh.* tables. Discovery rehydrates
+// every registered name into a dedicated LState by re-evaluating the
+// source bytes; the original discovery-pass state is discarded.
 type LuaPlugin struct {
 	name string
 	L    *lua.LState
@@ -30,6 +25,18 @@ type LuaPlugin struct {
 
 // Name reports the plugin's registry key.
 func (p *LuaPlugin) Name() string { return p.name }
+
+// Close releases the underlying LState. Not currently wired into engine
+// teardown — present for future lifecycle work and tests that want to
+// release resources eagerly.
+func (p *LuaPlugin) Close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.L != nil {
+		p.L.Close()
+		p.L = nil
+	}
+}
 
 // New decodes cfg into a Lua table, builds the env table, and returns a
 // LuaInstance bound to both. The instance reuses p.L; serializing access

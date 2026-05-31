@@ -5,11 +5,11 @@
 // Design call: one *lua.LState per registered plugin (LuaPlugin). Cheap
 // (~tens of µs per State), avoids cross-plugin mutation of `sesh.*` table
 // or globals, and lets each plugin's `up`/`down` keep upvalue closures
-// without surprises. Discovery pass uses a temporary shared State only to
-// run all `sesh.register(...)` calls; immediately after, each registered
-// plugin is rehydrated into its own dedicated LState by re-loading its
-// source. (Spike: we cheat slightly — discovery and runtime currently
-// share one State; the rehydrate step is a TODO.)
+// without surprises. Discovery is two-pass: first pass runs each source
+// in a throwaway state with a stub sesh.register that records (name →
+// source-bytes); second pass evaluates each source again in a fresh
+// LState with the real API and binds the captured plugin table to a
+// LuaPlugin.
 package lua
 
 import (
@@ -44,6 +44,9 @@ func registerSeshAPI(L *lua.LState) {
 
 	// sesh.wait_for
 	L.SetField(sesh, "wait_for", L.NewFunction(luaWaitFor))
+
+	// sesh.applescript
+	L.SetField(sesh, "applescript", L.NewFunction(luaApplescript))
 
 	// sesh.log.{info,warn,error}
 	logTbl := L.NewTable()

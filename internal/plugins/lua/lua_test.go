@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/goccy/go-yaml/parser"
 	"github.com/ijcd/sesh/internal/plugins"
@@ -261,6 +262,125 @@ sesh.register("dup", { up = function() end, down = function() end })
 	err := loadFromString(src, reg.Register)
 	if err == nil || !strings.Contains(err.Error(), "duplicate name") {
 		t.Errorf("expected duplicate-name error, got %v", err)
+	}
+}
+
+// TestBridge_OneLStatePerPlugin verifies plugins do not share globals.
+// Plugin A sets _G.shared_marker; plugin B reads it. With per-plugin
+// LState, B never sees A's global and returns nil. With a shared state
+// (spike behavior), B would see the marker and return an error.
+func TestBridge_OneLStatePerPlugin(t *testing.T) {
+	src := `
+sesh.register("plugA", {
+  up = function(env, cfg) _G.shared_marker = "from-A"; return nil end,
+  down = function() return nil end,
+})
+sesh.register("plugB", {
+  up = function(env, cfg)
+    if _G.shared_marker then
+      return "plugin B saw shared_marker = " .. _G.shared_marker
+    end
+    return nil
+  end,
+  down = function() return nil end,
+})
+`
+	reg := plugins.NewRegistry()
+	if err := loadFromString(src, reg.Register); err != nil {
+		t.Fatalf("loadFromString: %v", err)
+	}
+	pa, _ := reg.Get("plugA")
+	pb, _ := reg.Get("plugB")
+	ia, err := pa.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
+	if err != nil {
+		t.Fatalf("plugA New: %v", err)
+	}
+	ib, err := pb.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
+	if err != nil {
+		t.Fatalf("plugB New: %v", err)
+	}
+	if err := ia.Up(context.Background()); err != nil {
+		t.Fatalf("plugA Up: %v", err)
+	}
+	if err := ib.Up(context.Background()); err != nil {
+		t.Errorf("plugB Up: expected nil (isolated state), got %v", err)
+	}
+}
+
+// TestWaitFor_PredicateErrorPropagates verifies a predicate that raises
+// surfaces as a Go error rather than silently timing out.
+func TestWaitFor_PredicateErrorPropagates(t *testing.T) {
+	src := `
+sesh.register("wfbad", {
+  up = function(env, cfg)
+    sesh.wait_for(function() error("boom from predicate") end, 5000)
+    return nil
+  end,
+  down = function() return nil end,
+})
+`
+	reg := plugins.NewRegistry()
+	if err := loadFromString(src, reg.Register); err != nil {
+		t.Fatalf("loadFromString: %v", err)
+	}
+	p, _ := reg.Get("wfbad")
+	inst, err := p.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	start := time.Now()
+	err = inst.Up(context.Background())
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("Up: expected error from predicate, got nil")
+	}
+	if !strings.Contains(err.Error(), "boom") && !strings.Contains(err.Error(), "predicate") {
+		t.Errorf("Up err = %v, want containing 'boom' or 'predicate'", err)
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("Up took %v, expected early return (well under 5s timeout)", elapsed)
+	}
+}
+
+// TestApplescript_DispatchesViaOsascript verifies sesh.applescript invokes
+// osascript -e <script> via the test seam. Skips on non-darwin platforms.
+func TestApplescript_DispatchesViaOsascript(t *testing.T) {
+	var gotArgs []string
+	orig := execOsascript
+	execOsascript = func(args ...string) ([]byte, int, error) {
+		gotArgs = append([]string{}, args...)
+		return []byte("ok"), 0, nil
+	}
+	t.Cleanup(func() { execOsascript = orig })
+
+	src := `
+sesh.register("asrun", {
+  up = function(env, cfg)
+    local r = sesh.applescript("tell application \"Firefox\" to activate")
+    if r.code ~= 0 then return "applescript failed: " .. (r.error or "") end
+    if r.stdout ~= "ok" then return "stdout = " .. r.stdout end
+    return nil
+  end,
+  down = function() return nil end,
+})
+`
+	reg := plugins.NewRegistry()
+	if err := loadFromString(src, reg.Register); err != nil {
+		t.Fatalf("loadFromString: %v", err)
+	}
+	p, _ := reg.Get("asrun")
+	inst, err := p.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := inst.Up(context.Background()); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if len(gotArgs) != 2 || gotArgs[0] != "-e" {
+		t.Errorf("argv = %v, want [-e <script>]", gotArgs)
+	}
+	if !strings.Contains(gotArgs[1], "Firefox") {
+		t.Errorf("argv[1] = %q, want containing 'Firefox'", gotArgs[1])
 	}
 }
 

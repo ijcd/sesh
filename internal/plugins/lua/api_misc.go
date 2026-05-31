@@ -10,9 +10,9 @@ import (
 
 // luaWaitFor implements sesh.wait_for(predicate, timeout_ms). Polls the
 // predicate every 100ms; returns true on truthy, false on timeout.
-// Predicate may itself error (via Lua error()) — the spike treats that
-// as "not yet true" and keeps polling. That choice is up for debate;
-// flagged in SPIKE-NOTES.
+// Predicate errors (via Lua error()) are re-raised as Lua errors via
+// L.RaiseError — surface to the calling Up/Down so a buggy predicate
+// fails visibly rather than silently spinning until timeout.
 func luaWaitFor(L *lua.LState) int {
 	fn := L.CheckFunction(1)
 	timeoutMs := L.OptInt(2, 5000)
@@ -20,17 +20,22 @@ func luaWaitFor(L *lua.LState) int {
 	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
 
 	for {
-		if err := L.CallByParam(lua.P{
+		err := L.CallByParam(lua.P{
 			Fn:      fn,
 			NRet:    1,
 			Protect: true,
-		}); err == nil {
-			ret := L.Get(-1)
-			L.Pop(1)
-			if lua.LVAsBool(ret) {
-				L.Push(lua.LTrue)
-				return 1
-			}
+		})
+		if err != nil {
+			// Re-raise as Lua error; CallByParam in the caller will see it
+			// (Option B from the plan: traceback rather than (false, errstr)).
+			L.RaiseError("sesh.wait_for: predicate error: %s", err.Error())
+			return 0
+		}
+		ret := L.Get(-1)
+		L.Pop(1)
+		if lua.LVAsBool(ret) {
+			L.Push(lua.LTrue)
+			return 1
 		}
 		if time.Now().After(deadline) {
 			L.Push(lua.LFalse)
