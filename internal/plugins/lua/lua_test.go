@@ -718,12 +718,12 @@ func withExecDetachRecorder(t *testing.T, calls *[]string) {
 	t.Cleanup(func() { execDetachRunner = orig })
 }
 
-// withFileExists swaps fileExistsFunc for the duration of the test.
+// withFileExists swaps fileExists for the duration of the test.
 func withFileExists(t *testing.T, fn func(string) bool) {
 	t.Helper()
-	orig := fileExistsFunc
-	fileExistsFunc = fn
-	t.Cleanup(func() { fileExistsFunc = orig })
+	orig := fileExists
+	fileExists = fn
+	t.Cleanup(func() { fileExists = orig })
 }
 
 func TestFirefoxLua_UpRunsCreateThenLaunch(t *testing.T) {

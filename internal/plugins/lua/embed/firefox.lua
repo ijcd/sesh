@@ -4,6 +4,13 @@
 -- profile under Settings -> "Open previous windows and tabs"). Sesh sets up
 -- the profile and launches it; the browser handles the rest.
 
+-- escape_applescript escapes \ and " for safe interpolation into an
+-- AppleScript string literal. Backslash first so the inserted backslashes
+-- don't double-escape when " is substituted next.
+local function escape_applescript(s)
+  return (s:gsub("\\", "\\\\"):gsub('"', '\\"'))
+end
+
 local function resolve_binary(cfg)
   if cfg.binary then return cfg.binary end
   local p = sesh.path_lookup("firefox")
@@ -36,7 +43,7 @@ sesh.register("firefox", {
     local profile = cfg.profile or env.name
     sesh.applescript(string.format(
       [[tell application "Firefox" to close (every window whose name contains "%s")]],
-      profile))
+      escape_applescript(profile)))
     return nil
   end,
 
