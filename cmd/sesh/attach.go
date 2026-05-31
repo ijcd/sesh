@@ -43,9 +43,11 @@ func runProject(ctx context.Context, e *engine.Engine, p *spec.Project, force, l
 		return err
 	}
 	if needsLaunch(p, launchFlag) {
-		if err := performLaunch(ctx, p); err != nil {
+		newCtx, err := performLaunch(ctx, p)
+		if err != nil {
 			return err
 		}
+		ctx = newCtx
 	}
 	if err := e.Up(ctx, p, force); err != nil {
 		return err
