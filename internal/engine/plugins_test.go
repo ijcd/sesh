@@ -69,7 +69,7 @@ type fakePlugin struct {
 	downErr        error
 	newErr         error
 	validateErrors []error
-	dryRunArgv     []string
+	dryRunArgv     [][]string
 	dryRunErr      error
 }
 
@@ -97,7 +97,7 @@ type fakeInstance struct {
 	upErr          error
 	downErr        error
 	validateErrors []error
-	dryRunArgv     []string
+	dryRunArgv     [][]string
 	dryRunErr      error
 }
 
@@ -109,8 +109,8 @@ func (i *fakeInstance) Down(ctx context.Context) error {
 	i.log.add(fmt.Sprintf("plugin:down:%s:%s", i.plugin, i.project))
 	return i.downErr
 }
-func (i *fakeInstance) Validate() []error         { return i.validateErrors }
-func (i *fakeInstance) DryRun() ([]string, error) { return i.dryRunArgv, i.dryRunErr }
+func (i *fakeInstance) Validate() []error           { return i.validateErrors }
+func (i *fakeInstance) DryRun() ([][]string, error) { return i.dryRunArgv, i.dryRunErr }
 
 // newRecEngine returns an engine with a driverShim registered under driverName
 // plus the shared log for assertions.
@@ -336,7 +336,7 @@ func TestEngineDebug_IncludesPluginDryRun(t *testing.T) {
 	if err := e.RegisterPlugin(&fakePlugin{
 		name:       "fake",
 		log:        log,
-		dryRunArgv: []string{"fake-cmd", "arg1", "arg2"},
+		dryRunArgv: [][]string{{"fake-cmd", "arg1", "arg2"}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -352,6 +352,54 @@ func TestEngineDebug_IncludesPluginDryRun(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "fake-cmd arg1 arg2") {
 		t.Errorf("output missing plugin dry-run argv; got %q", out)
+	}
+}
+
+// TestEngineDebug_MultiArgvDryRunOneLinePerArgv verifies that a plugin
+// returning multiple argvs gets one line per argv under a single header.
+func TestEngineDebug_MultiArgvDryRunOneLinePerArgv(t *testing.T) {
+	e, log := newRecEngine("tmux")
+	if err := e.RegisterPlugin(&fakePlugin{
+		name:       "multi",
+		log:        log,
+		dryRunArgv: [][]string{{"cmd-a", "x"}, {"cmd-b", "y", "z"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p := &spec.Project{
+		Name: "x", Driver: "tmux", Cwd: "/tmp",
+		Tabs: []spec.Tab{{Title: "a", Cmd: "echo"}},
+		Apps: []spec.App{spec.NewApp("multi", "")},
+	}
+	var buf bytes.Buffer
+	if err := e.Debug(context.Background(), p, true, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "# apps[0] multi") {
+		t.Errorf("output missing apps[0] header; got %q", out)
+	}
+	if !strings.Contains(out, "cmd-a x") {
+		t.Errorf("output missing first argv line 'cmd-a x'; got %q", out)
+	}
+	if !strings.Contains(out, "cmd-b y z") {
+		t.Errorf("output missing second argv line 'cmd-b y z'; got %q", out)
+	}
+	// Each argv must be on its own line.
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	var headerIdx, aIdx, bIdx = -1, -1, -1
+	for i, l := range lines {
+		switch {
+		case l == "# apps[0] multi":
+			headerIdx = i
+		case l == "cmd-a x":
+			aIdx = i
+		case l == "cmd-b y z":
+			bIdx = i
+		}
+	}
+	if headerIdx < 0 || aIdx != headerIdx+1 || bIdx != headerIdx+2 {
+		t.Errorf("expected header then two argv lines in order; lines=%v", lines)
 	}
 }
 

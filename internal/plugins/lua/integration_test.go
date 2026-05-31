@@ -1,28 +1,28 @@
-//go:build integration_emacs
+//go:build integration_lua
 
-// Real-emacs integration test for the emacs plugin. Gated `integration_emacs`
-// so plain `go test ./...` keeps skipping it (no emacs dependency on CI).
+// Real-emacs integration test for the Lua emacs plugin. Gated
+// `integration_lua` so plain `go test ./...` keeps skipping it (no emacs
+// dependency on CI).
 //
-// Coverage: pre-spawn a uniquely-named emacs daemon, install test hooks that
-// record their argv into a daemon-side global, then run plugin Up/Down against
-// the daemon via the real Plugin factory + RawConfig decode path. Asserts the
-// daemon-side global was mutated to the expected (:open …) / (:close …) shape.
+// Coverage: pre-spawn a uniquely-named emacs daemon, install test hooks
+// that record their argv into a daemon-side global, then run plugin
+// Up/Down against the daemon via the Lua bridge's public LoadAll path
+// (exercising the embedded emacs.lua + YAML→Lua-table config decode).
+// Asserts the daemon-side global was mutated to the expected
+// (:open …) / (:close …) shape.
 //
-// The plugin's own daemon-spawn fallback (`emacs --daemon=<name>` when the
-// probe fails) is intentionally *not* exercised here: `emacs --daemon=...`
-// loads the user's full init in this process tree, which can hang on
-// interactive prompts (direnv, etc.) and is host-dependent. The T7 unit test
-// (`TestEmacs_UpSpawnsDaemonWhenClientErrors`) covers that path with a fake
-// runner — the integration test only needs to prove that the dispatch wire
-// works against a real daemon.
+// We pass `-Q` to `emacs --daemon=…` in test setup so the daemon spins
+// up quickly and reliably independent of the user's emacs config. Daemon
+// name is pid-derived (`sesh-test-<pid>`) so a stray daemon never
+// collides with the user's real `sesh` daemon. Cleanup runs via
+// t.Cleanup so a test panic still kills the daemon.
 //
-// We pass `-Q` to `emacs --daemon=...` in test setup so the daemon spins up
-// quickly and reliably independent of the user's emacs config. Daemon name is
-// pid-derived (`sesh-test-<pid>`) so a stray daemon never collides with the
-// user's real `sesh` daemon. Cleanup runs via t.Cleanup so a test panic still
-// kills the daemon.
+// Unlike the v0.4 Go-emacs integration test, this one does NOT need the
+// EMACS_SOCKET_NAME env workaround: the Lua plugin always passes
+// --socket-name=<daemon> on every emacsclient invocation, so the daemon
+// override in cfg is honored end-to-end.
 
-package emacs
+package lua
 
 import (
 	"context"
@@ -51,11 +51,11 @@ func requireEmacs(t *testing.T) {
 }
 
 // spawnTestDaemon launches `emacs -Q --daemon=<name>` and polls until
-// emacsclient can reach the socket (≤10s). `-Q` is critical: it skips the
-// user's init file so the daemon comes up in seconds regardless of how
-// heavyweight the user's emacs config is. Registers a t.Cleanup that issues
-// `(kill-emacs)` — failures during cleanup are logged, not fatal, because
-// the daemon may already be dead.
+// emacsclient can reach the socket (≤10s). `-Q` is critical: it skips
+// the user's init file so the daemon comes up in seconds regardless of
+// how heavyweight the user's emacs config is. Registers a t.Cleanup
+// that issues `(kill-emacs)` — failures during cleanup are logged, not
+// fatal, because the daemon may already be dead.
 func spawnTestDaemon(t *testing.T, name string) {
 	t.Helper()
 	if err := exec.Command("emacs", "-Q", "--daemon="+name).Run(); err != nil {
@@ -80,9 +80,9 @@ func spawnTestDaemon(t *testing.T, name string) {
 	}
 }
 
-// evalInDaemon runs an elisp form against the named daemon and returns its
-// printed value as a trimmed string. Fails the test on emacsclient error so
-// callers don't have to handle the unhappy path verbatim.
+// evalInDaemon runs an elisp form against the named daemon and returns
+// its printed value as a trimmed string. Fails the test on emacsclient
+// error so callers don't have to handle the unhappy path verbatim.
 func evalInDaemon(t *testing.T, name, form string) string {
 	t.Helper()
 	cmd := exec.Command("emacsclient", "--socket-name="+name, "-e", form)
@@ -93,36 +93,45 @@ func evalInDaemon(t *testing.T, name, form string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// buildPluginInstance constructs a real *plugin* Instance via the public
-// factory, exercising the YAML decode path so any drift in the config schema
-// surfaces at test time. The `daemon:` field is set so the plugin's
-// emacsclient invocations route to our per-test daemon — emacsclient honours
-// the EMACS_SOCKET_NAME env var as a default, which we set below so the bare
-// `emacsclient` commands the plugin runs (no --socket-name flag) target the
-// uniquely-named daemon.
-func buildPluginInstance(t *testing.T, env plugins.ProjectEnv, daemon string) plugins.Instance {
+// buildLuaEmacsInstance loads the embedded emacs.lua via the public
+// LoadAll path, builds a YAML config that points at our test daemon,
+// and returns the resulting Instance. Exercises YAML→Lua-table decode
+// so config-schema drift surfaces at test time.
+func buildLuaEmacsInstance(t *testing.T, env plugins.ProjectEnv, daemon string) plugins.Instance {
 	t.Helper()
+	reg := plugins.NewRegistry()
+	if _, err := LoadAll(reg.Register); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	p, ok := reg.Get("emacs")
+	if !ok {
+		t.Fatal("emacs plugin not registered")
+	}
 	src := fmt.Sprintf("daemon: %s\nhook: sesh-open-project\nclose_hook: sesh-close-project\n", daemon)
 	f, err := parser.ParseBytes([]byte(src), 0)
 	if err != nil {
 		t.Fatalf("ParseBytes: %v", err)
 	}
 	raw := plugins.NewRawConfig(f.Docs[0].Body)
-	inst, err := New().New(env, raw)
+	inst, err := p.New(env, raw)
 	if err != nil {
 		t.Fatalf("Plugin.New: %v", err)
 	}
-	t.Setenv("EMACS_SOCKET_NAME", daemon)
 	return inst
 }
 
-// TestEmacs_RealDaemonOpenClose pre-spawns the daemon under a unique name
-// (avoiding the user's real `sesh` daemon), pre-installs `sesh-open-project`
-// and `sesh-close-project` as test hooks that record their args into a
-// daemon-side global, then runs the plugin's Up + Down and reads the global
-// back to verify the daemon saw the expected open and close calls.
-func TestEmacs_RealDaemonOpenClose(t *testing.T) {
+// TestEmacsLua_RealDaemonOpenClose pre-spawns the daemon under a unique
+// name (avoiding the user's real `sesh` daemon), pre-installs
+// `sesh-open-project` and `sesh-close-project` as test hooks that
+// record their args into a daemon-side global, then runs the plugin's
+// Up + Down and reads the global back to verify the daemon saw the
+// expected open and close calls.
+func TestEmacsLua_RealDaemonOpenClose(t *testing.T) {
 	requireEmacs(t)
+
+	// Defensive: clear any inherited EMACS_SOCKET_NAME so it can't paper
+	// over a bug where the plugin fails to pass --socket-name=<daemon>.
+	t.Setenv("EMACS_SOCKET_NAME", "")
 
 	daemonName := fmt.Sprintf("sesh-test-%d", os.Getpid())
 	spawnTestDaemon(t, daemonName)
@@ -135,7 +144,7 @@ func TestEmacs_RealDaemonOpenClose(t *testing.T) {
 
 	cwd := t.TempDir()
 	env := plugins.ProjectEnv{Name: "testproj", Cwd: cwd}
-	inst := buildPluginInstance(t, env, daemonName)
+	inst := buildLuaEmacsInstance(t, env, daemonName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

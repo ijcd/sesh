@@ -2,7 +2,7 @@
 
 One command to bring up everything a project needs: terminal tabs, panes, hooks, and (eventually) editor / browser / comms / Spaces.
 
-Like tmuxinator, but multi-driver from the start (tmux + kitty terminal drivers; emacs editor plugin in v0.4; browser / comms plugins planned).
+Like tmuxinator, but multi-driver from the start (tmux + kitty terminal drivers; Lua plugin bridge in v0.5 with emacs + firefox plugins; comms plugins planned).
 
 ## Install
 
@@ -263,12 +263,12 @@ sesh capture my-new-project > ~/.config/sesh/projects/my-new-project.yml
 
 Print to stdout, review, edit, then save as a project config. Never writes to disk directly — all capture output is suggestion-only.
 
-### 9. Editor: emacs sidecar via the plugin SPI (v0.4)
+### 9. Sidecars: emacs + firefox via the plugin SPI
 
-sesh dispatches non-terminal sidecars (editors, browsers, comms) after the terminal layer is up. v0.4 ships the emacs plugin; more drivers land in v0.5+.
+sesh dispatches non-terminal sidecars (editors, browsers, comms) after the terminal layer is up. v0.4 introduced the plugin SPI with an emacs reference plugin; v0.5 reimplements plugins in Lua and adds firefox.
 
 ```yaml
-# ~/.config/sesh/projects/liberties-emacs.yml
+# ~/.config/sesh/projects/liberties.yml
 driver: kitty
 cwd: ~/work/liberties
 tabs:
@@ -279,16 +279,21 @@ apps:
     files:
       - ./README.md
       - ./mix.exs
+  - plugin: firefox
+    profile: liberties
+    url: http://localhost:4000
 ```
 
-`sesh up liberties-emacs` brings up the kitty tab, then runs `(sesh-open-project "liberties-emacs" "/Users/me/work/liberties" '("/Users/me/work/liberties/README.md" "/Users/me/work/liberties/mix.exs"))` against your emacs daemon. **sesh provides mechanism; your emacs config provides policy** — the `sesh-open-project` function is yours to define. Get a sensible default tab-bar-based recipe with:
+`sesh up liberties` brings up the kitty tab, then runs `(sesh-open-project "liberties" "/Users/me/work/liberties" '("/Users/me/work/liberties/README.md" "/Users/me/work/liberties/mix.exs"))` against your emacs daemon, then launches Firefox under a per-project profile pointed at `http://localhost:4000`. **sesh provides mechanism; your emacs config provides policy** — the `sesh-open-project` function is yours to define. Get a sensible default tab-bar-based recipe with:
 
 ```sh
 sesh init emacs >> ~/.emacs.d/sesh.el
 echo '(load-file "~/.emacs.d/sesh.el")' >> ~/.emacs.d/init.el
 ```
 
-Or copy and customize freely. Hook names, daemon name, and files are configurable per-entry in the YAML; full schema below.
+Or copy and customize freely. Browser tabs restore on launch via Firefox's own session-restore (enable once per profile under **Settings → "Open previous windows and tabs"**); sesh handles only profile + initial URL.
+
+Plugins are Lua. See `internal/plugins/lua/embed/` for the shipped emacs and firefox plugins; drop your own `.lua` files in `~/.config/sesh/plugins/` to extend. Hook names, daemon name, profile, URL, and files are configurable per-entry in the YAML; full schema below.
 
 ## Discovery hook (`sesh init`)
 
@@ -372,8 +377,8 @@ Loading a project file with `extends:` produces a clear error pointing at `inclu
 | `tabs[].panes[].title` | string | Required. |
 | `tabs[].panes[].cmd` | string | Required. |
 | `tabs[].panes[].cwd` | path | Default = tab cwd. Relative path joins parent. |
-| `apps` | list | Non-terminal plugin sidecars dispatched after drivers up. Each entry has `plugin` + opaque per-plugin keys. v0.4 ships `emacs`. |
-| `apps[].plugin` | string | Required. Names the registered plugin (`emacs` in v0.4). |
+| `apps` | list | Non-terminal plugin sidecars dispatched after drivers up. Each entry has `plugin` + opaque per-plugin keys. v0.5 ships `emacs` and `firefox` (both Lua). |
+| `apps[].plugin` | string | Required. Names the registered plugin (`emacs`, `firefox`). |
 | `apps[].id` | string | Optional. Disambiguates multiple entries with the same plugin; auto-indexed (`emacs`, `emacs#2`, …) when omitted. |
 | `apps[].optional` | bool | Default `false`. When `true`, plugin failure is logged but `sesh up` continues. |
 | `apps[].drop` | bool | Merge sentinel: child entry removes inherited match by key (parallel to `tabs[].drop`). |
@@ -387,6 +392,15 @@ Loading a project file with `extends:` produces a clear error pointing at `inclu
 | `close_hook` | `sesh-close-project` | Elisp symbol called on `sesh down`. Receives `(name)`. Best-effort. |
 | `daemon` | `sesh` | `emacsclient --socket-name=<daemon>`; spawned via `emacs --daemon=<daemon>` if absent. |
 | `files` | _(none)_ | Optional list of paths; relative paths absolutized against project `cwd`. |
+
+**Firefox plugin keys** (under an `apps[]` entry with `plugin: firefox`):
+
+| Key | Default | Notes |
+|---|---|---|
+| `profile` | project name | Firefox profile name; created via `-CreateProfile` if absent. |
+| `url` | _(none)_ | Optional initial URL passed to `firefox -P <profile> --new-instance <url>`. |
+| `binary` | `firefox` on PATH, else `/Applications/Firefox.app/Contents/MacOS/firefox` | Override the launched binary. |
+| `kill_on_down` | `false` | When `true`, `sesh down` closes Firefox windows whose title contains the profile name (via AppleScript, macOS). |
 
 **Merge rules** (when `include:` is used):
 
@@ -412,15 +426,15 @@ There's no mature open-source tool that orchestrates a multi-app project workspa
 
 ## Status
 
-**Pre-v1.** v0.4: tmux + kitty drivers, `include:` composition, global defaults file, `sesh init` discovery hook, `$SESH_PROJECT` direnv connector, plugin SPI with the emacs reference plugin. ~330 tests.
+**Pre-v1.** v0.5: tmux + kitty drivers, `include:` composition, global defaults file, `sesh init` discovery hook, `$SESH_PROJECT` direnv connector, plugin SPI with Lua bridge — emacs and firefox plugins ship in-tree. ~336 tests.
 
 ## Roadmap
 
 - **v0.1** — tmux driver, tmuxinator parity ✓
 - **v0.2** — kitty driver, --launch, full containment ✓
 - **v0.3** — global config, include:, sesh init, direnv connector ✓
-- **v0.4** (current) — plugin SPI (mechanism-not-policy); emacs reference plugin; `apps:` envelope
-- **v0.5** — browser plugin
+- **v0.4** — plugin SPI (mechanism-not-policy); emacs reference plugin; `apps:` envelope ✓
+- **v0.5** (current) — Lua plugin bridge; emacs ported to Lua; firefox plugin
 - **v1.0** — comms + Spaces + packaging
 
 ## License

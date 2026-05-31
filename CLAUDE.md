@@ -2,11 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-v0.3 in Go (`cmd/sesh`) — tmux + kitty drivers, global config, include:, discovery hook.
+v0.5 in Go (`cmd/sesh`) — tmux + kitty drivers, global config, include:, discovery hook, plugin SPI with Lua bridge (emacs + firefox).
 
 ## What this is
 
-`sesh` — a project-aware workspace orchestrator. One command brings up everything a project needs (terminal tabs/panes, eventually editor/browser/comms/Spaces). Pre-v1; **only the terminal layer is implemented**. See `README.md` for current status.
+`sesh` — a project-aware workspace orchestrator. One command brings up everything a project needs (terminal tabs/panes, eventually editor/browser/comms/Spaces). Pre-v1; **terminal layer + apps SPI (Lua plugins: emacs, firefox)** shipped through v0.5. See `README.md` for current status.
 
 ## Code shape
 
@@ -76,6 +76,7 @@ When extending driver support, **update `containment.go` and the `Validate` func
 - `integration` — real tmux on isolated socket
 - `integration_kitty` — real kitten ls (requires KITTY_LISTEN_ON_TEST env)
 - `integration_cross` — real kitty + real tmux cross-driver dispatch (requires SESH_TEST_KITTY_LAUNCH=1; opens a kitty window)
+- `integration_lua` — real emacs daemon round-trip via the Lua bridge (requires emacs + emacsclient on PATH)
 - `e2e` — built binary smoke
 - `e2e_docs` — README YAML examples validate
 
@@ -83,4 +84,4 @@ When extending driver support, **update `containment.go` and the `Validate` func
 
 - For "how is X configured?" — read `docs/superpowers/specs/` for design rationale not in the code.
 - Pre-v1 means no backwards-compatibility burden yet. Prefer changing the schema cleanly over adding migration shims.
-- Plugin SPI (v0.4) is implemented: `internal/plugins/` defines `Plugin`/`Instance`; `apps:` envelopes route opaquely to each plugin. Emacs is the reference consumer (`internal/plugins/emacs/`). Mechanism-not-policy: core owns lifecycle + envelope, plugins own everything app-shaped. README has a worked `apps:` example; plan at `docs/superpowers/plans/2026-05-28-sesh-v0.4-plugin-spi.md` is the source of truth (the 2026-05-25 spec is superseded).
+- Plugin SPI (v0.4) is in `internal/plugins/`: `Plugin`/`Instance` interfaces in `plugin.go`, ordered `Registry`, `apps:` envelopes route opaquely. v0.5 added a Lua bridge — user-facing plugins are Lua under `internal/plugins/lua/embed/` (emacs, firefox); the bridge in `internal/plugins/lua/` exposes a `sesh.*` API to Lua via gopher-lua. Mechanism-not-policy throughout: core owns lifecycle/envelope, plugins own everything app-shaped. Plans at `docs/superpowers/plans/2026-05-28-sesh-v0.4-plugin-spi.md` (v0.4) and `docs/superpowers/plans/2026-05-30-sesh-v0.5-lua-plugin-bridge.md` (v0.5) are the source of truth.

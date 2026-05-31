@@ -7,7 +7,7 @@ import (
 	_ "embed"
 	"fmt"
 
-	"github.com/ijcd/sesh/internal/plugins/emacs/recipe"
+	"github.com/ijcd/sesh/internal/plugins/lua/embed/recipe"
 )
 
 //go:embed scripts/zsh.sh

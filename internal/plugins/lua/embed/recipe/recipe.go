@@ -1,7 +1,8 @@
-// Package recipe embeds the default sesh.el policy file shipped with the
-// emacs plugin. The recipe is detachable: sesh's runtime never executes
-// elisp, it only dispatches user-defined hooks. This package exists so
-// `sesh init emacs` can stream the file to stdout for users to source.
+// Package recipe embeds the default sesh.el policy file shipped alongside
+// the emacs Lua plugin. The recipe is detachable: sesh's runtime never
+// executes elisp, it only dispatches user-defined hooks. This package
+// exists so `sesh init emacs` can stream the file to stdout for users to
+// source.
 package recipe
 
 import _ "embed"

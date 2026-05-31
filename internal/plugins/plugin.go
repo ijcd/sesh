@@ -22,7 +22,11 @@ type Instance interface {
 	Up(ctx context.Context) error
 	Down(ctx context.Context) error
 	Validate() []error
-	DryRun() ([]string, error)
+	// DryRun returns one argv per shell call the plugin would invoke,
+	// in the order Up would execute them. Single-call plugins return a
+	// length-1 slice; multi-step plugins (e.g. probe + spawn + dispatch)
+	// return one argv per step. Empty slice means "nothing to dispatch".
+	DryRun() ([][]string, error)
 }
 
 // ProjectEnv is the irreducible identity core promises every plugin.
