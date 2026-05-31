@@ -63,7 +63,7 @@ sesh.register("sentinel", {
 	}
 
 	cfg := rawFromYAML(t, "path: "+sentinel+"\n")
-	inst, err := p.New(plugins.ProjectEnv{Name: "spike", Cwd: dir}, cfg)
+	inst, err := p.New(plugins.ProjectEnv{Name: "test", Cwd: dir}, cfg)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -271,8 +271,8 @@ sesh.register("dup", { up = function() end, down = function() end })
 
 // TestBridge_OneLStatePerPlugin verifies plugins do not share globals.
 // Plugin A sets _G.shared_marker; plugin B reads it. With per-plugin
-// LState, B never sees A's global and returns nil. With a shared state
-// (spike behavior), B would see the marker and return an error.
+// LState, B never sees A's global and returns nil. With a shared state,
+// B would see the marker and return an error.
 func TestBridge_OneLStatePerPlugin(t *testing.T) {
 	src := `
 sesh.register("plugA", {

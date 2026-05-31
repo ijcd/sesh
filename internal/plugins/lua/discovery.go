@@ -238,8 +238,8 @@ func loadFromString(src string, register Register) error {
 	if err != nil {
 		return fmt.Errorf("lua: discover source: %w", err)
 	}
-	// Detect duplicate names within a single source (preserve spike behavior:
-	// duplicate registration is an error). The real sesh.register also
+	// Detect duplicate names within a single source (duplicate
+	// registration is an error). The real sesh.register also
 	// rejects them, but we'd otherwise lose that signal by only building one
 	// plugin per unique name.
 	seen := map[string]bool{}

@@ -19,8 +19,8 @@ import (
 )
 
 // newState constructs a fresh gopher-lua state with the `sesh.*` API
-// registered. The standard Lua libraries are loaded as-is for the spike;
-// sandboxing (restricting os.execute, io.popen, etc.) is a v0.5 design
+// registered. The standard Lua libraries are loaded as-is in v0.5;
+// sandboxing (restricting os.execute, io.popen, etc.) is a design
 // question deliberately deferred.
 func newState() *lua.LState {
 	L := lua.NewState()
@@ -117,7 +117,7 @@ func luaRegister(L *lua.LState) int {
 // and cfg table as args. Returns the single Lua return value (any) and
 // any runtime error.
 //
-// Return-value convention (per spike API): up/down return a string error
+// Return-value convention (per plugin API): up/down return a string error
 // or nil for success.
 func callPluginFn(L *lua.LState, tbl *lua.LTable, fnName string, env, cfg *lua.LTable) (lua.LValue, error) {
 	fn := L.GetField(tbl, fnName)

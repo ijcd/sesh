@@ -6,7 +6,7 @@ v0.5 in Go (`cmd/sesh`) — tmux + kitty drivers, global config, include:, disco
 
 ## What this is
 
-`sesh` — a project-aware workspace orchestrator. One command brings up everything a project needs (terminal tabs/panes, eventually editor/browser/comms/Spaces). Pre-v1; **only the terminal layer is implemented**. See `README.md` for current status.
+`sesh` — a project-aware workspace orchestrator. One command brings up everything a project needs (terminal tabs/panes, eventually editor/browser/comms/Spaces). Pre-v1; **terminal layer + apps SPI (Lua plugins: emacs, firefox)** shipped through v0.5. See `README.md` for current status.
 
 ## Code shape
 

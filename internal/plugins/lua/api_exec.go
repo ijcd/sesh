@@ -67,12 +67,12 @@ var pathLookup = func(bin string) (string, error) {
 // a table { stdout = "...", stderr = "...", code = <int> }.
 //
 // `args` may be a Lua array of strings or nil. `opts` is currently
-// ignored (placeholder for future stdin/timeout/cwd) — present so the
-// spike can feel the call site shape.
+// ignored (placeholder for future stdin/timeout/cwd) — present so
+// callers can shape the call site.
 func luaExec(L *lua.LState) int {
 	bin := L.CheckString(1)
 	args := lvalueToStringSlice(L.OptTable(2, L.NewTable()))
-	_ = L.OptTable(3, L.NewTable()) // opts (unused for spike)
+	_ = L.OptTable(3, L.NewTable()) // opts (unused in v0.5)
 
 	r := execRunner(bin, args)
 	result := L.NewTable()
