@@ -63,13 +63,16 @@ type LuaInstance struct {
 
 // Up calls the Lua-side up(env, cfg). Convention: returns string=error
 // or nil=success. Lua-side errors (via error()) propagate as Go errors.
+// ctx is stashed on the LState so sesh.exec / sesh.exec_detach /
+// sesh.applescript can pick it up and honor cancellation; cleared on
+// return so leaking the ctx into a later Validate/DryRun is impossible.
 func (i *LuaInstance) Up(ctx context.Context) error {
-	return i.call("up")
+	return i.callWithCtx(ctx, "up")
 }
 
 // Down mirrors Up.
 func (i *LuaInstance) Down(ctx context.Context) error {
-	return i.call("down")
+	return i.callWithCtx(ctx, "down")
 }
 
 // Validate calls the Lua-side validate(env, cfg). Convention: returns a
@@ -153,12 +156,17 @@ func (i *LuaInstance) DryRun() ([][]string, error) {
 	return rows, nil
 }
 
-// call is the shared Up/Down implementation. Lua convention: return
-// nil=success, string=error message. Lua runtime errors (via error())
-// propagate as Go errors too.
-func (i *LuaInstance) call(fnName string) error {
+// callWithCtx is the shared Up/Down implementation. Lua convention:
+// return nil=success, string=error message. Lua runtime errors (via
+// error()) propagate as Go errors too. ctx is stashed on the LState
+// for the duration of the call so sesh.exec / sesh.exec_detach /
+// sesh.applescript can honor cancellation.
+func (i *LuaInstance) callWithCtx(ctx context.Context, fnName string) error {
 	i.plugin.mu.Lock()
 	defer i.plugin.mu.Unlock()
+
+	setStateCtx(i.plugin.L, ctx)
+	defer clearStateCtx(i.plugin.L)
 
 	ret, err := callPluginFn(i.plugin.L, i.plugin.tbl, fnName, i.env, i.cfg)
 	if err != nil {

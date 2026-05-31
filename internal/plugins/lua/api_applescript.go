@@ -2,6 +2,7 @@ package lua
 
 import (
 	"bytes"
+	"context"
 	osexec "os/exec"
 	"runtime"
 
@@ -10,12 +11,13 @@ import (
 
 // execOsascript is the dispatch seam for sesh.applescript. Tests override
 // to capture argv without spawning osascript. Default impl shells out via
-// `osascript -e <script>` and returns (combined-output, exitcode, error).
+// `osascript -e <script>` with the caller's ctx (so a hanging AppleScript
+// dialog can be cancelled by dispatch deadline / SIGINT).
 //
 // Multi-line scripts are supported: osascript accepts a single -e with
 // embedded newlines.
-var execOsascript = func(args ...string) ([]byte, int, error) {
-	cmd := osexec.Command("osascript", args...)
+var execOsascript = func(ctx context.Context, args ...string) ([]byte, int, error) {
+	cmd := osexec.CommandContext(ctx, "osascript", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -46,7 +48,7 @@ func luaApplescript(L *lua.LState) int {
 		return 1
 	}
 
-	out, code, err := execOsascript("-e", script)
+	out, code, err := execOsascript(stateCtx(L), "-e", script)
 	L.SetField(result, "stdout", lua.LString(string(out)))
 	L.SetField(result, "code", lua.LNumber(code))
 	if err != nil && code == -1 {

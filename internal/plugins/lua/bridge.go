@@ -13,10 +13,47 @@
 package lua
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
 	lua "github.com/yuin/gopher-lua"
 )
+
+// ctxByLState lets the sesh.* API functions (luaExec, luaExecDetach,
+// luaApplescript) retrieve the caller's ctx without touching the Lua
+// API surface. LuaInstance.Up/Down bracket their work with
+// setStateCtx / clearStateCtx so an in-flight exec inherits the
+// dispatch's deadline / cancellation.
+//
+// Lookups fall back to context.Background() — e.g., when the bridge is
+// driven outside an Up/Down path (today: only the discovery pass, which
+// uses a separate stub state and never reaches these seams).
+var (
+	ctxMu       sync.RWMutex
+	ctxByLState = map[*lua.LState]context.Context{}
+)
+
+func setStateCtx(L *lua.LState, ctx context.Context) {
+	ctxMu.Lock()
+	defer ctxMu.Unlock()
+	ctxByLState[L] = ctx
+}
+
+func clearStateCtx(L *lua.LState) {
+	ctxMu.Lock()
+	defer ctxMu.Unlock()
+	delete(ctxByLState, L)
+}
+
+func stateCtx(L *lua.LState) context.Context {
+	ctxMu.RLock()
+	defer ctxMu.RUnlock()
+	if c, ok := ctxByLState[L]; ok {
+		return c
+	}
+	return context.Background()
+}
 
 // newState constructs a fresh gopher-lua state with the `sesh.*` API
 // registered. The standard Lua libraries are loaded as-is in v0.5;

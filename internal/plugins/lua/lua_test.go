@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -355,7 +356,7 @@ func TestApplescript_DispatchesViaOsascript(t *testing.T) {
 	}
 	var gotArgs []string
 	orig := execOsascript
-	execOsascript = func(args ...string) ([]byte, int, error) {
+	execOsascript = func(ctx context.Context, args ...string) ([]byte, int, error) {
 		gotArgs = append([]string{}, args...)
 		return []byte("ok"), 0, nil
 	}
@@ -422,7 +423,7 @@ type execScript struct {
 	results []execResult
 }
 
-func (e *execScript) run(bin string, args []string) execResult {
+func (e *execScript) run(ctx context.Context, bin string, args []string) execResult {
 	argv := append([]string{bin}, args...)
 	e.calls = append(e.calls, strings.Join(argv, " "))
 	if len(e.results) > 0 {
@@ -712,7 +713,7 @@ func loadFirefoxLuaPlugin(t *testing.T) plugins.Plugin {
 func withExecDetachRecorder(t *testing.T, calls *[]string) {
 	t.Helper()
 	orig := execDetachRunner
-	execDetachRunner = func(bin string, args []string) (int, error) {
+	execDetachRunner = func(ctx context.Context, bin string, args []string) (int, error) {
 		argv := append([]string{bin}, args...)
 		*calls = append(*calls, strings.Join(argv, " "))
 		return 12345, nil
@@ -777,7 +778,7 @@ func TestFirefoxLua_KillOnDownInvokesApplescript(t *testing.T) {
 	}
 	var gotArgs []string
 	orig := execOsascript
-	execOsascript = func(args ...string) ([]byte, int, error) {
+	execOsascript = func(ctx context.Context, args ...string) ([]byte, int, error) {
 		gotArgs = append([]string{}, args...)
 		return []byte(""), 0, nil
 	}
@@ -891,6 +892,219 @@ sesh.register("p", {
 	inst, _ := p.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
 	if err := inst.Up(context.Background()); err != nil {
 		t.Errorf("Up: %v", err)
+	}
+}
+
+// TestLua_UpThreadsCtxToExecSeam verifies the ctx passed into Up() is
+// the same ctx instance handed to execRunner. Without ctx threading, a
+// hanging emacsclient inside up() is uncancellable by `sesh up`'s
+// deadline or SIGINT — a regression from the v0.4 Go emacs plugin which
+// used exec.CommandContext directly.
+func TestLua_UpThreadsCtxToExecSeam(t *testing.T) {
+	type ctxKey string
+	const marker ctxKey = "test-marker"
+	wantCtx := context.WithValue(context.Background(), marker, "from-up")
+
+	var gotCtx context.Context
+	orig := execRunner
+	execRunner = func(ctx context.Context, bin string, args []string) execResult {
+		gotCtx = ctx
+		return execResult{Code: 0}
+	}
+	t.Cleanup(func() { execRunner = orig })
+
+	src := `
+sesh.register("ctxprobe", {
+  up = function(env, cfg)
+    sesh.exec("anything", {})
+    return nil
+  end,
+  down = function() return nil end,
+})
+`
+	reg := plugins.NewRegistry()
+	if err := loadFromString(src, reg.Register); err != nil {
+		t.Fatalf("loadFromString: %v", err)
+	}
+	p, _ := reg.Get("ctxprobe")
+	inst, err := p.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := inst.Up(wantCtx); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if gotCtx == nil {
+		t.Fatal("execRunner never received a ctx")
+	}
+	if got := gotCtx.Value(marker); got != "from-up" {
+		t.Errorf("ctx marker = %v, want from-up (ctx was not threaded from Up)", got)
+	}
+}
+
+// TestLua_UpHonorsContextCancellation drives sesh.exec with a real `sleep`
+// subprocess and cancels the caller's ctx after 100ms; asserts the call
+// returns well under the sleep duration with a non-zero exit. Requires
+// `sleep` on PATH; skips otherwise.
+func TestLua_UpHonorsContextCancellation(t *testing.T) {
+	if _, err := osexec.LookPath("sleep"); err != nil {
+		t.Skipf("sleep not on PATH: %v", err)
+	}
+	src := `
+sesh.register("sleeper", {
+  up = function(env, cfg)
+    local r = sesh.exec("sleep", { "10" })
+    if r.code == 0 then return "sleep finished normally — expected cancellation" end
+    return nil
+  end,
+  down = function() return nil end,
+})
+`
+	reg := plugins.NewRegistry()
+	if err := loadFromString(src, reg.Register); err != nil {
+		t.Fatalf("loadFromString: %v", err)
+	}
+	p, _ := reg.Get("sleeper")
+	inst, err := p.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	start := time.Now()
+	err = inst.Up(ctx)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("Up took %v, expected <2s (ctx cancellation killed the sleep)", elapsed)
+	}
+}
+
+// TestLua_DownThreadsCtxToExecSeam mirrors Up's ctx check for the Down path.
+func TestLua_DownThreadsCtxToExecSeam(t *testing.T) {
+	type ctxKey string
+	const marker ctxKey = "down-marker"
+	wantCtx := context.WithValue(context.Background(), marker, "from-down")
+
+	var gotCtx context.Context
+	orig := execRunner
+	execRunner = func(ctx context.Context, bin string, args []string) execResult {
+		gotCtx = ctx
+		return execResult{Code: 0}
+	}
+	t.Cleanup(func() { execRunner = orig })
+
+	src := `
+sesh.register("ctxprobe2", {
+  up = function() return nil end,
+  down = function(env, cfg)
+    sesh.exec("anything", {})
+    return nil
+  end,
+})
+`
+	reg := plugins.NewRegistry()
+	if err := loadFromString(src, reg.Register); err != nil {
+		t.Fatalf("loadFromString: %v", err)
+	}
+	p, _ := reg.Get("ctxprobe2")
+	inst, _ := p.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
+	if err := inst.Down(wantCtx); err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+	if gotCtx == nil {
+		t.Fatal("execRunner never received a ctx")
+	}
+	if got := gotCtx.Value(marker); got != "from-down" {
+		t.Errorf("ctx marker = %v, want from-down", got)
+	}
+}
+
+// TestLua_ExecDetachThreadsCtxToSeam mirrors the assertion for exec_detach.
+func TestLua_ExecDetachThreadsCtxToSeam(t *testing.T) {
+	type ctxKey string
+	const marker ctxKey = "detach-marker"
+	wantCtx := context.WithValue(context.Background(), marker, "from-up-detach")
+
+	var gotCtx context.Context
+	orig := execDetachRunner
+	execDetachRunner = func(ctx context.Context, bin string, args []string) (int, error) {
+		gotCtx = ctx
+		return 1234, nil
+	}
+	t.Cleanup(func() { execDetachRunner = orig })
+
+	src := `
+sesh.register("ctxdetach", {
+  up = function(env, cfg)
+    sesh.exec_detach("anything", {})
+    return nil
+  end,
+  down = function() return nil end,
+})
+`
+	reg := plugins.NewRegistry()
+	if err := loadFromString(src, reg.Register); err != nil {
+		t.Fatalf("loadFromString: %v", err)
+	}
+	p, _ := reg.Get("ctxdetach")
+	inst, _ := p.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
+	if err := inst.Up(wantCtx); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if gotCtx == nil {
+		t.Fatal("execDetachRunner never received a ctx")
+	}
+	if got := gotCtx.Value(marker); got != "from-up-detach" {
+		t.Errorf("ctx marker = %v, want from-up-detach", got)
+	}
+}
+
+// TestLua_ApplescriptThreadsCtxToSeam mirrors the assertion for applescript.
+func TestLua_ApplescriptThreadsCtxToSeam(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin-only: osascript not available on this platform")
+	}
+	type ctxKey string
+	const marker ctxKey = "as-marker"
+	wantCtx := context.WithValue(context.Background(), marker, "from-up-as")
+
+	var gotCtx context.Context
+	orig := execOsascript
+	execOsascript = func(ctx context.Context, args ...string) ([]byte, int, error) {
+		gotCtx = ctx
+		return []byte(""), 0, nil
+	}
+	t.Cleanup(func() { execOsascript = orig })
+
+	src := `
+sesh.register("ctxas", {
+  up = function(env, cfg)
+    sesh.applescript("return 1")
+    return nil
+  end,
+  down = function() return nil end,
+})
+`
+	reg := plugins.NewRegistry()
+	if err := loadFromString(src, reg.Register); err != nil {
+		t.Fatalf("loadFromString: %v", err)
+	}
+	p, _ := reg.Get("ctxas")
+	inst, _ := p.New(plugins.ProjectEnv{Name: "x", Cwd: "/"}, plugins.NewRawConfig(nil))
+	if err := inst.Up(wantCtx); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if gotCtx == nil {
+		t.Fatal("execOsascript never received a ctx")
+	}
+	if got := gotCtx.Value(marker); got != "from-up-as" {
+		t.Errorf("ctx marker = %v, want from-up-as", got)
 	}
 }
 

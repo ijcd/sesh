@@ -2,6 +2,7 @@ package lua
 
 import (
 	"bytes"
+	"context"
 	osexec "os/exec"
 
 	lua "github.com/yuin/gopher-lua"
@@ -18,11 +19,12 @@ type execResult struct {
 
 // execRunner is the dispatch seam for sesh.exec. Tests override to capture
 // argv and return scripted results without spawning. Default impl shells
-// out via os/exec.
+// out via os/exec with the caller's ctx so dispatch deadlines / SIGINT
+// can cancel an in-flight subprocess.
 //
 // Pattern mirrors execOsascript in api_applescript.go.
-var execRunner = func(bin string, args []string) execResult {
-	cmd := osexec.Command(bin, args...)
+var execRunner = func(ctx context.Context, bin string, args []string) execResult {
+	cmd := osexec.CommandContext(ctx, bin, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -45,8 +47,14 @@ var execRunner = func(bin string, args []string) execResult {
 
 // execDetachRunner is the dispatch seam for sesh.exec_detach. Tests
 // override to capture argv. Default impl spawns and reaps in the
-// background.
-var execDetachRunner = func(bin string, args []string) (pid int, err error) {
+// background. ctx governs the spawn only — once Start succeeds, the
+// child outlives the ctx (that's the point of "detach": Firefox spawned
+// by `sesh up` must survive `sesh up` returning). We honor an
+// already-cancelled ctx at entry, then drop it.
+var execDetachRunner = func(ctx context.Context, bin string, args []string) (pid int, err error) {
+	if err := ctx.Err(); err != nil {
+		return -1, err
+	}
 	cmd := osexec.Command(bin, args...)
 	if err := cmd.Start(); err != nil {
 		return -1, err
@@ -74,7 +82,7 @@ func luaExec(L *lua.LState) int {
 	args := lvalueToStringSlice(L.OptTable(2, L.NewTable()))
 	_ = L.OptTable(3, L.NewTable()) // opts (unused in v0.5)
 
-	r := execRunner(bin, args)
+	r := execRunner(stateCtx(L), bin, args)
 	result := L.NewTable()
 	L.SetField(result, "stdout", lua.LString(r.Stdout))
 	L.SetField(result, "stderr", lua.LString(r.Stderr))
@@ -93,7 +101,7 @@ func luaExecDetach(L *lua.LState) int {
 	args := lvalueToStringSlice(L.OptTable(2, L.NewTable()))
 	_ = L.OptTable(3, L.NewTable())
 
-	pid, err := execDetachRunner(bin, args)
+	pid, err := execDetachRunner(stateCtx(L), bin, args)
 	result := L.NewTable()
 	if err != nil {
 		L.SetField(result, "error", lua.LString(err.Error()))
