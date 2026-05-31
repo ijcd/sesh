@@ -73,6 +73,10 @@ type leaf struct {
 	ref  *string
 }
 
+// collectLeaves walks Project's string fields for ${VAR} interpolation.
+// Apps[].Raw is deliberately skipped: plugin config is opaque to core.
+// Plugins that want variable interpolation expand on the Lua side via
+// sesh.* APIs, or do their own substitution in up/down.
 func collectLeaves(p *spec.Project) []leaf {
 	out := []leaf{
 		{"cwd", &p.Cwd},
