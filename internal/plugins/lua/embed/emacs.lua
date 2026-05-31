@@ -1,8 +1,6 @@
--- Lua port of internal/plugins/emacs/{emacs,elisp}.go.
+-- Lua emacs plugin (v0.5+, replaces the Go emacs package).
 -- Mechanism-not-policy: shells out to `emacsclient -e <form>`; the form
 -- is a call to a user-defined hook (sesh-open-project / sesh-close-project).
--- Registers as "emacs-lua" during the spike so the Go "emacs" plugin can
--- still be loaded alongside for comparison.
 
 local function quote(s)
   -- Wrap s in a double-quoted elisp literal, escaping backslash and quote.
@@ -54,7 +52,7 @@ local function ec_run(socket, form)
   return sesh.exec("emacsclient", { socket, "-e", form })
 end
 
-sesh.register("emacs-lua", {
+sesh.register("emacs", {
   up = function(env, cfg)
     local c = defaults(cfg)
     local form = build_open_form(c.hook, env.name, env.cwd, c.files)
@@ -88,7 +86,7 @@ sesh.register("emacs-lua", {
     local form = build_close_form(c.close_hook, env.name)
     local r = ec_run("--socket-name=" .. c.daemon, form)
     if r.code ~= 0 then
-      sesh.log.warn("emacs-lua: close hook (best-effort): " .. (r.stderr or "exit " .. tostring(r.code)))
+      sesh.log.warn("emacs: close hook (best-effort): " .. (r.stderr or "exit " .. tostring(r.code)))
     end
     return nil -- best-effort: never propagate
   end,
@@ -97,13 +95,13 @@ sesh.register("emacs-lua", {
     local errs = {}
     local c = defaults(cfg)
     if not sesh.path_lookup("emacsclient") then
-      table.insert(errs, "emacs-lua: emacsclient not found in PATH")
+      table.insert(errs, "emacs: emacsclient not found in PATH")
     end
     if not c.hook:match(ELISP_SYMBOL) then
-      table.insert(errs, "emacs-lua: hook '" .. c.hook .. "' is not a valid elisp symbol")
+      table.insert(errs, "emacs: hook '" .. c.hook .. "' is not a valid elisp symbol")
     end
     if not c.close_hook:match(ELISP_SYMBOL) then
-      table.insert(errs, "emacs-lua: close_hook '" .. c.close_hook .. "' is not a valid elisp symbol")
+      table.insert(errs, "emacs: close_hook '" .. c.close_hook .. "' is not a valid elisp symbol")
     end
     return errs
   end,

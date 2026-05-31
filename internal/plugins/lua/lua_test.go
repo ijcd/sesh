@@ -177,15 +177,15 @@ func TestLua_EmbeddedEmacsDryRun(t *testing.T) {
 	}
 	found := false
 	for _, n := range names {
-		if n == "emacs-lua" {
+		if n == "emacs" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("emacs-lua not in registered names: %v", names)
+		t.Fatalf("emacs not in registered names: %v", names)
 	}
-	p, _ := reg.Get("emacs-lua")
+	p, _ := reg.Get("emacs")
 	inst, err := p.New(
 		plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"},
 		rawFromYAML(t, ""),
@@ -227,7 +227,7 @@ func TestLua_EmbeddedEmacsDryRunWithConfigOverrides(t *testing.T) {
 	if _, err := LoadAll(reg.Register); err != nil {
 		t.Fatalf("LoadAll: %v", err)
 	}
-	p, _ := reg.Get("emacs-lua")
+	p, _ := reg.Get("emacs")
 	src := "hook: my-open\ndaemon: prj\nfiles:\n  - README.md\n  - /abs/path.txt\n"
 	inst, err := p.New(plugins.ProjectEnv{Name: "lib", Cwd: "/cwd"}, rawFromYAML(t, src))
 	if err != nil {
@@ -405,9 +405,9 @@ func loadEmacsLuaPlugin(t *testing.T) plugins.Plugin {
 	if _, err := LoadAll(reg.Register); err != nil {
 		t.Fatalf("LoadAll: %v", err)
 	}
-	p, ok := reg.Get("emacs-lua")
+	p, ok := reg.Get("emacs")
 	if !ok {
-		t.Fatal("emacs-lua plugin not registered")
+		t.Fatal("emacs plugin not registered")
 	}
 	return p
 }
@@ -449,8 +449,8 @@ func withPathLookup(t *testing.T, fn func(string) (string, error)) {
 
 func TestEmacsLua_PluginNameIsEmacs(t *testing.T) {
 	p := loadEmacsLuaPlugin(t)
-	if got := p.Name(); got != "emacs-lua" {
-		t.Errorf("Name = %q, want %q", got, "emacs-lua")
+	if got := p.Name(); got != "emacs" {
+		t.Errorf("Name = %q, want %q", got, "emacs")
 	}
 }
 
