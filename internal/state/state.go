@@ -12,6 +12,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/ijcd/sesh/internal/xdg"
 )
 
 const Version = 1
@@ -107,12 +109,9 @@ func (s *Store) Save(path string) error {
 
 // DefaultPath returns the standard state.json location for sesh.
 func DefaultPath() (string, error) {
-	if xdg := os.Getenv("XDG_STATE_HOME"); xdg != "" {
-		return filepath.Join(xdg, "sesh", "state.json"), nil
-	}
-	home, err := os.UserHomeDir()
+	sh, err := xdg.StateHome()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".local", "state", "sesh", "state.json"), nil
+	return filepath.Join(sh, "sesh", "state.json"), nil
 }

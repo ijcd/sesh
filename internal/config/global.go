@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/goccy/go-yaml"
+
+	"github.com/ijcd/sesh/internal/xdg"
 )
 
 // Global holds defaults applied to projects when their corresponding
@@ -65,12 +67,9 @@ func LoadGlobal(path string) (*Global, error) {
 
 // GlobalDefaultPath returns $XDG_CONFIG_HOME/sesh/config.yml, or ~/.config/sesh/config.yml.
 func GlobalDefaultPath() (string, error) {
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "sesh", "config.yml"), nil
-	}
-	home, err := os.UserHomeDir()
+	cfg, err := xdg.ConfigHome()
 	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
+		return "", err
 	}
-	return filepath.Join(home, ".config", "sesh", "config.yml"), nil
+	return filepath.Join(cfg, "sesh", "config.yml"), nil
 }
