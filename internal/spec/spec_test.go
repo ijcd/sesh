@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/goccy/go-yaml"
@@ -156,6 +157,20 @@ tabs: [{title: shell}]
 	}
 	if len(p.Include) != 3 || p.Include[2] != "hooks/notify" {
 		t.Errorf("Include = %v", p.Include)
+	}
+}
+
+func TestStringList_UnmarshalYAML_RejectsInteger(t *testing.T) {
+	// Non-string, non-list (here: integer) should fail with a message that
+	// names the offending shape, not a generic goccy decode error.
+	in := []byte("pre_window: 42\n")
+	var p Project
+	err := yaml.Unmarshal(in, &p)
+	if err == nil {
+		t.Fatal("expected error for integer pre_window, got nil")
+	}
+	if msg := err.Error(); !strings.Contains(msg, "StringList") || !strings.Contains(msg, "Integer") {
+		t.Errorf("error %q should mention StringList and Integer (shape)", msg)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/goccy/go-yaml"
 
 	"github.com/ijcd/sesh/internal/spec"
+	"github.com/ijcd/sesh/internal/xdg"
 )
 
 // LoadFile reads a single YAML file from disk and returns its decoded form.
@@ -57,12 +58,9 @@ func ResolveTemplatePath(nameOrPath, baseDir string) (string, error) {
 }
 
 func configDir() (string, error) {
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "sesh"), nil
-	}
-	home, err := os.UserHomeDir()
+	cfg, err := xdg.ConfigHome()
 	if err != nil {
-		return "", fmt.Errorf("resolve home dir: %w", err)
+		return "", err
 	}
-	return filepath.Join(home, ".config", "sesh"), nil
+	return filepath.Join(cfg, "sesh"), nil
 }

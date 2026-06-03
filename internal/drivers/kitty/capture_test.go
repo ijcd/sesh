@@ -5,6 +5,32 @@ import (
 	"testing"
 )
 
+func TestPickFocused_EmptyReturnsZero(t *testing.T) {
+	// Empty input returns a zero-valued struct, not a panic.
+	got := pickFocused(nil)
+	if got.ID != 0 || got.IsFocused {
+		t.Errorf("pickFocused(nil): got %+v, want zero value", got)
+	}
+}
+
+func TestPickFocused_PrefersFocused(t *testing.T) {
+	wins := []kittyOSWindow{
+		{ID: 1, IsFocused: false},
+		{ID: 2, IsFocused: true},
+		{ID: 3, IsFocused: false},
+	}
+	if got := pickFocused(wins); got.ID != 2 {
+		t.Errorf("pickFocused: got ID=%d, want 2", got.ID)
+	}
+}
+
+func TestPickFocused_FallsBackToFirst(t *testing.T) {
+	wins := []kittyOSWindow{{ID: 5, IsFocused: false}, {ID: 9, IsFocused: false}}
+	if got := pickFocused(wins); got.ID != 5 {
+		t.Errorf("pickFocused: got ID=%d, want first (5)", got.ID)
+	}
+}
+
 func TestCapture_NoOSWindows(t *testing.T) {
 	fr := &fakeRunner{captureOut: `[]`}
 	d := newWith(fr)

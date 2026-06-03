@@ -15,8 +15,9 @@ type ValidationError struct {
 
 func (e ValidationError) Error() string { return fmt.Sprintf("%s: %s", e.Path, e.Reason) }
 
-// Validate checks structural rules. Mutates p only to default the Driver field
-// when empty. Returns all violations (caller decides how to surface them).
+// Validate checks structural rules. Pure — reads p and returns violations,
+// does not mutate. Driver-field defaulting belongs to applyGlobalDefaults,
+// which runs earlier in the pipeline.
 //
 // Plugin-registry membership is not checked here — pass a non-nil registry
 // to ValidateWithRegistry for that. T5 wires it from the engine.
@@ -29,9 +30,6 @@ func Validate(p *spec.Project, registeredDrivers []string) []error {
 func ValidateWithRegistry(p *spec.Project, registeredDrivers []string, registry *plugins.Registry) []error {
 	var errs []error
 
-	if p.Driver == "" {
-		p.Driver = "tmux"
-	}
 	registered := false
 	for _, d := range registeredDrivers {
 		if d == p.Driver {

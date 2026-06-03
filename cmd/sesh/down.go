@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -23,27 +24,44 @@ func newDownCmd(e *engine.Engine) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ctx := context.Background()
 
-			// If this project was launched via --launch, thread its tracked socket
-			// into ctx so the kitty driver can talk to that instance without
-			// mutating os.Setenv.
-			statePath, err := state.DefaultPath()
-			if err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not resolve state path: %v; --launch cleanup skipped\n", err)
-			} else {
-				s, err := state.Load(statePath)
-				if err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not read state.json: %v; --launch cleanup skipped\n", err)
-				} else if entry, ok := s.Get(p.Name); ok {
-					ctx = drivers.WithSocketHint(ctx, "unix:"+entry.Socket)
-					defer cleanupLaunch(s, p.Name, statePath, entry.Socket)
-				}
+			// Classify cleanup state up front: did this project come up via
+			// --launch (tracked in state.json)? If so, thread its socket into
+			// ctx so the kitty driver talks to that instance without mutating
+			// os.Setenv, and defer cleanup of the state entry + socket file.
+			ctx, cleanup := resolveLaunchCleanup(cmd.ErrOrStderr(), p.Name)
+			if cleanup != nil {
+				defer cleanup()
 			}
 
 			return e.Down(ctx, p)
 		},
 	}
+}
+
+// resolveLaunchCleanup looks up the project in state.json and returns
+// (ctx-with-socket-hint, deferred-cleanup) when a launched entry is found.
+// Any state-layer error is logged once and the function returns
+// (context.Background(), nil) — Down still runs, just without launch cleanup.
+func resolveLaunchCleanup(errOut io.Writer, projectName string) (context.Context, func()) {
+	ctx := context.Background()
+
+	statePath, err := state.DefaultPath()
+	if err != nil {
+		fmt.Fprintf(errOut, "warning: could not resolve state path: %v; --launch cleanup skipped\n", err)
+		return ctx, nil
+	}
+	s, err := state.Load(statePath)
+	if err != nil {
+		fmt.Fprintf(errOut, "warning: could not read state.json: %v; --launch cleanup skipped\n", err)
+		return ctx, nil
+	}
+	entry, ok := s.Get(projectName)
+	if !ok {
+		return ctx, nil
+	}
+	ctx = drivers.WithSocketHint(ctx, "unix:"+entry.Socket)
+	return ctx, func() { cleanupLaunch(s, projectName, statePath, entry.Socket) }
 }
 
 func cleanupLaunch(s *state.Store, name, statePath, socket string) {

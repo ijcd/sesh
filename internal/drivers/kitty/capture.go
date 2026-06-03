@@ -153,8 +153,14 @@ func tabTitlePrefix(title string) string {
 	return title[:i]
 }
 
+// pickFocused returns the focused window from wins, falling back to the first
+// element when none is focused. Returns a zero-valued kittyOSWindow when wins
+// is empty; callers should usually pre-check len(wins) > 0 since a zero ID is
+// not meaningful, but the function does not panic on empty input.
 func pickFocused(wins []kittyOSWindow) kittyOSWindow {
-	// Caller must guarantee len(wins) > 0
+	if len(wins) == 0 {
+		return kittyOSWindow{}
+	}
 	for _, w := range wins {
 		if w.IsFocused {
 			return w

@@ -1,23 +1,41 @@
 // Package spec contains the typed shape of a sesh project YAML file.
 package spec
 
-import "github.com/goccy/go-yaml"
+import (
+	"fmt"
+
+	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+)
 
 // StringList accepts either a YAML scalar or a YAML sequence and stores both as []string.
 type StringList []string
 
-func (s *StringList) UnmarshalYAML(b []byte) error {
-	var single string
-	if err := yaml.Unmarshal(b, &single); err == nil {
+// UnmarshalYAML dispatches on the AST node type rather than try/recover so the
+// error message names the offending shape (e.g. an integer where a string or
+// list was expected) instead of bubbling goccy's generic decode error.
+func (s *StringList) UnmarshalYAML(node ast.Node) error {
+	switch node.Type() {
+	case ast.StringType, ast.LiteralType:
+		var single string
+		if err := yaml.NodeToValue(node, &single); err != nil {
+			return err
+		}
 		*s = StringList{single}
 		return nil
+	case ast.SequenceType:
+		var multi []string
+		if err := yaml.NodeToValue(node, &multi); err != nil {
+			return err
+		}
+		*s = StringList(multi)
+		return nil
+	case ast.NullType:
+		*s = nil
+		return nil
+	default:
+		return fmt.Errorf("StringList: expected string or sequence, got %s", node.Type())
 	}
-	var multi []string
-	if err := yaml.Unmarshal(b, &multi); err != nil {
-		return err
-	}
-	*s = StringList(multi)
-	return nil
 }
 
 // Project is the resolved, merged, expanded form of a project file.

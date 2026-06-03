@@ -3,6 +3,8 @@ package lua
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"os"
 	osexec "os/exec"
 
 	lua "github.com/yuin/gopher-lua"
@@ -60,8 +62,15 @@ var execDetachRunner = func(ctx context.Context, bin string, args []string) (pid
 		return -1, err
 	}
 	pid = cmd.Process.Pid
-	// Reap in background so we don't leak zombies. Fire-and-forget from Lua's POV.
-	go func() { _ = cmd.Wait() }()
+	// Reap in background so we don't leak zombies. Fire-and-forget from
+	// Lua's POV, but surface non-zero exits to stderr — Firefox crashing
+	// immediately after launch would otherwise leave Up returning success
+	// with no diagnostic.
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			fmt.Fprintf(os.Stderr, "sesh: detached %s (pid %d) exited with error: %v\n", bin, pid, err)
+		}
+	}()
 	return pid, nil
 }
 
